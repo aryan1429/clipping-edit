@@ -26,7 +26,7 @@ The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.m
   - a white flash before the shock
   - a red wash on the fail
   - motion-blur whips
-- Ending: a meme freeze with a zoom-blur entry, a sepia grade and a 💀 emoji, held for 1.5 s.
+- Ending: a meme freeze with a zoom-blur entry, a sepia grade and a 💀 emoji, held for 1.5 s. (Ref-1 specific; NOT a default - see Ending row.)
 - Very bright high-key grade (luma mean 209). Colour is selective: the background stays white and the wardrobe and skin pop.
 - The music bed runs throughout.
 
@@ -81,7 +81,7 @@ The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.m
 | Colour use | white + accent keywords | white + 1-3 keywords | one colour per chunk | **white base + 1-3 semantic keywords; a whole chunk may take one colour for exclamations/second speaker** |
 | Flash density | ~6 / 40 s | ~50% of cuts | 3-5 / min | **1 accent per 6-8 s (5-8 per 45 s), never more than 40% of cuts** |
 | Pace (avg shot) | 1.5 s | 2.2 s | 2-2.5 s | **1.8-2.2 s average; 0.3-1 s jump cuts in the first 3 s; holds up to 7 s only on the action/climax** |
-| Ending | meme freeze + 💀 | emoji fly-in + title + fade | hard cut | **meme freeze (ref 1) on the biggest reaction**; hard cut if there is no clear reaction face |
+| Ending | meme freeze + 💀 | emoji fly-in + title + fade | hard cut | **normal clean ending by default** (hard cut on the payoff/last reaction line, ref 3). Meme freeze + 💀 ONLY when the clip is a comedic fail/"no way" reaction moment that fits it (user 2026-10-31: not every clip has the skull) |
 | Music in tension | stays | muted, then build-up | stays | **continuous, ducked**; optional 2-4 s mute before the climax |
 | Grade level | luma 209 (studio) | 133 (mild) | 154, sat 93 | **ref 3 targets** (see grade) |
 | Close-face size | 18-25% H | 20-28% H | 25-35% H | **24% H (range 20-30%)** |
@@ -149,7 +149,7 @@ The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.m
   - Coloured by sentiment.
   - Typed on letter by letter over 0.4-0.6 s.
   - Placed in speechless action stretches and on fails.
-- **Emojis and stickers:** no inline emojis in captions. Stickers are PNG overlays: at most 1 climax pop (e.g. a green "+1" or "+$100,000" with glow, about 0.5 s) plus the ending 💀. In wide shots where the subject is tiny, an optional name pointer label (small yellow name plus a red down-triangle).
+- **Emojis and stickers:** no inline emojis in captions. Stickers are PNG overlays: at most 1 climax pop (e.g. a green "+1" or "+$100,000" with glow, about 0.5 s) plus the optional ending 💀. In wide shots where the subject is tiny, an optional name pointer label (small yellow name plus a red down-triangle).
 
 ### 4. Face framing and tracking
 - **Detector:** a face detector (MediaPipe / YuNet / InsightFace) on every frame, or every 2nd frame with interpolation. Identity is held by IoU or embedding, and the active speaker is chosen from mouth motion or diarization.
@@ -179,13 +179,13 @@ The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.m
 
 - In total, 1 accent per 6-8 s, and never more than 40% of cuts. Every other cut is a hard cut.
 - **Never use:** beat shake, per-word zoom punches, slow motion, speed ramps or a split screen.
-- **SFX:** one SFX per flash or whip (whoosh, impact, riser hit), each a different variant (see the user's unique-variant rule). Add an impact hit on the ending freeze.
-- **Ending (default meme freeze):**
+- **SFX:** one SFX per flash or whip (whoosh, impact, riser hit), each a different variant (see the user's unique-variant rule). Add an impact hit on the ending freeze (when one is used).
+- **Ending (default = normal clipping ending):** hard cut right after the payoff line / last reaction, no trailing silence; ideally the last frame flows into a replay (ref 3). Most clips end this way.
+- **Optional meme-freeze ending** (only when the moment is a comedic fail/shock reaction where it clearly fits; never automatic, user 2026-10-31):
   - 2-4 frame zoom/radial blur into a freeze of the biggest reaction face
   - warm/sepia high-contrast meme grade
   - one 💀 PNG (12% W, at mid-height, centre-left)
   - hold for 1.2-1.8 s, then hard end
-  - Alternative: hard cut on the payoff line, with the last frame flowing into a replay (ref 3).
 
 ### 6. Audio
 - Dialogue is normalised to about -14 LUFS integrated, with true peak ≤ -1 dBTP.
@@ -222,33 +222,18 @@ The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.m
 - Average shot 1.8-2.2 s (range 0.3-7 s): fast jump cuts in the hook, holds only on the climax action.
 - Remove dead air: gaps ≥ 0.3 s between phrases are cut unless they are a visual payoff.
 - Speechless action stretches are ≤ 5 s each (up to 9 s for the main climax) and always carry music plus an asterisk caption.
-- Structure: hook/premise (0-3 s), then setup, then attempts and reactions escalating 2-5 times, then the biggest reaction or payoff last, then the ending (freeze or hard cut).
+- Structure: hook/premise (0-3 s), then setup, then attempts and reactions escalating 2-5 times, then the biggest reaction or payoff last, then the ending (clean hard cut by default; meme freeze only when it fits).
   - Moments stay in source order.
 
-## Caption tool recommendation: ASS subtitles burned with ffmpeg/libass (primary), Pillow PNG overlays for graphics
+## Editing tool: EffectCraft (user choice, 2026-10-31) - SUPERSEDES the earlier libass recommendation
 
-**Why ASS + libass:**
-- **Exact timing.** Whisper word timestamps map one-to-one to `Dialogue` events. Each additive word-build step is one event, or a single event with per-word `{\alpha&HFF&\t(t1,t2,\alpha&H00&)}` tags.
-- **It covers everything the style needs:**
-  - per-word colour `\1c`
-  - stroke `\bord` and `\3c`
-  - shadow `\shad` / `\4c` with `\blur`
-  - the 3-frame entrance `\t(\fscx90\fscy90\blur6 -> \fscx100\fscy100\blur0)` and the fade
-  - position `\an5\pos(x,y)`
-  - letter-by-letter stage directions as per-character events
-- **Glow:** a same-colour glow is a second layer, `Layer 0` with `\bord8\blur18\3c<accent>\1a&HFF&`, under the crisp `Layer 1` text.
-- **Fast.** One pass inside the same ffmpeg render that does the crop, grade and audio. There is no extra encode, it is deterministic, and it is easy to regenerate after a fix.
-- **Fonts.** Montserrat Black is already installed in `C:/Windows/Fonts`, and `fontsdir` can point there.
+The user said: "for editing software, u can use effect craft". The edit (captions, zooms, flashes, stickers, optional freeze ending, grade) is built **by script in EffectCraft**, the same way as the AMV edits. Binary, build/render commands and EC gotchas: memory `amv-effectcraft-port` + amv-edit skill ref 19 (portable 0.16.0 `effectcraft-cli.exe`; run the update check first).
 
-**Why not EffectCraft for captions:**
-- It is a full compositor, and on this machine it has OOM history (it needs `--parts`). It is slow per render for what is just text over video.
-- It adds a second render or encode generation, which softens the image against the "sharper" rule.
-- Keep it as an option only if a caption needs real 3D or tracking-attached text.
-
-**Pillow for what libass cannot do:**
-- libass cannot render colour emoji (💀) or bitmap stickers ("+1", "+$100,000" with bevel/glow, the pointer label, meme stickers).
-- Render these as RGBA PNGs with Pillow (Montserrat Black + `ImageFilter.GaussianBlur` glow) and composite them with ffmpeg `overlay=enable='between(t,a,b)'`, adding a scale/fade via a `zoompan` or `fade` on the overlay stream.
-- Fallback: if libass glow quality is ever not enough, render whole caption frames with Pillow as a PNG sequence or a qtrle overlay. This costs more render time but gives the same look.
+Split of work:
+- **Python/ffmpeg (prep):** download, transcribe (word timestamps), pick moments, cut + concat the source segments to an intermediate (high bitrate / near-lossless, keep 60 fps), face detection -> smoothed crop path per frame (reset at camera cuts), caption chunk list with keyword colours, accent/SFX timeline, audio mix (dialogue -14 LUFS + ducked music + SFX).
+- **EffectCraft (edit):** 1080x1440 60 fps comp; source layer with Position/Scale keyframes from the crop path (that is the face tracking); text layers per caption chunk (Montserrat Black, ALL CAPS, word-by-word build via per-word layers or text animators, stroke + shadow + glow on keywords); zoom punches, flashes/whips, sticker PNGs; grade on an adjustment layer (Brightness/Contrast, Hue/Sat or Vibrance, Unsharp/Sharpen, glow via blurred copy in Screen - remember adjustment-layer blend modes are ignored in EC, use CC Composite).
+- **Render:** EC render at high bitrate (>= 30000 kbps), `--parts` if memory runs out; finish with ffmpeg mux of the mixed audio using `-c:v copy` (no second video encode, to keep it sharp); verify duration <= 59.5 s.
+- **Fallback:** if EC cannot do something (e.g. colour emoji text), render it as a Pillow PNG and import it as a footage layer. ASS/libass captions are a fallback only if EC fails outright.
 
 ## QC checklist before delivery
 - [ ] ffprobe duration ≤ 59.5 s; 1080x1440 3:4 (or 1080x1920 if 9:16 was asked for); audio present.
@@ -257,4 +242,4 @@ The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.m
 - [ ] Captions sit within ±2 frames of the whisper word starts, never cover the mouth, stay inside 80% W, profanity is censored, and accent colours are used.
 - [ ] The grade ratios against the source pass (luma +10% or more, sat +25% or more, sharpness ×1.4 or more).
 - [ ] Accent count ≤ 1 per 6 s, with no beat shake, no slow motion, and every SFX a distinct variant.
-- [ ] The ending is a meme freeze of 1.2-1.8 s or a clean hard cut, with no trailing silence.
+- [ ] The ending is a clean hard cut after the payoff (default) or, only where it fits, a meme freeze of 1.2-1.8 s; no trailing silence.

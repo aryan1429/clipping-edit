@@ -11,6 +11,7 @@ Long video -> best moments -> finished short clips. Learnings repo: https://gith
 2026-10-31: style spec = references/01_ishowspeed_clip_style.md (READ FIRST; it overrides the defaults below). User hard rules: final file <= 60 s (assert <= 59.5 s), face tracking always on, colour correction must make it sharper, brighter, more colourful (measured vs source). Python: run with `-P` (not `-I`), PYTHONIOENCODING=utf8, feed faster-whisper a numpy array.
 
 ## Tools on this machine
+- Editing software: **EffectCraft** (CLI, by script; see ref 01 'Editing tool' for the Python-prep / EC-edit / ffmpeg-mux split)
 - Python: `C:/Users/aryan/AppData/Local/Python/pythoncore-3.14-64/python.exe` (yt_dlp, faster_whisper, cv2, numpy, torch present; no mediapipe)
 - ffmpeg: `imageio_ffmpeg.get_ffmpeg_exe()`
 - GPU: RTX 3050 laptop, 4 GB (faster-whisper small/medium int8 fits)
@@ -50,8 +51,8 @@ One-line trigger ("clip this video: <url>"): run the whole job without asking qu
    - On a same-camera jump cut, vary the crop scale by 4-10% (face height stays at 20-30% H).
    - Two people: use a wider crop that holds both. Never use a split screen (ref 01).
    - Gate: the face bbox plus a 5% margin is always inside the frame, including after any push-in or zoom.
-5. Captions (ref 01): ASS via libass burned in the same ffmpeg pass as crop+grade; Montserrat Black ALL CAPS, 2-4 word chunks building word by word, white + 1-3 coloured keywords, centred ~50% height, moved if over the face.
-6. Polish (ref 01): hook = strongest line from frame 0 (no banner), music full from frame 0, accents (flash/whip + unique SFX) every ~6-8 s, freeze-frame reaction ending; grade = eq/vibrance/unsharp + light glow, verify luma/sat/sharpness gains.
+5. Captions (ref 01): built as text layers in EffectCraft (user's editing software, ref 01 'Editing tool'); Montserrat Black ALL CAPS, 2-4 word chunks building word by word, white + 1-3 coloured keywords, centred ~50% height, moved if over the face.
+6. Polish (ref 01): hook = strongest line from frame 0 (no banner), music full from frame 0, accents (flash/whip + unique SFX) every ~6-8 s; ending = normal clean hard cut after the payoff by default, meme freeze + 💀 only when the moment fits (not every clip); grade = eq/vibrance/unsharp + light glow, verify luma/sat/sharpness gains.
 7. **Render** 1080x1440 h264 + AAC.
    - Output: `raw/NN-slug.mp4` (reframed only) and `edited/NN-slug.mp4`.
    - Log one line per clip: `ok NN-slug.mp4 dur:XX.Xs accents:N captions:N`.
