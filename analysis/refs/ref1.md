@@ -1,6 +1,8 @@
 # Ref 1: "No way she did that" #ishowspeed #edit (deagzzzshorts, 124M views)
 
-Source: `C:/Users/aryan/clipping_jobs/refs/ref1.mp4`. It is AV1, 1080x1440, 60 fps, 38.87 s long, with AAC 44.1k stereo audio. I looked at the 1 fps frames and at 10 fps dense sheets for 0-1.6, 3-4.6, 6.5-8.1, 9.3-10.9, 22.6-24.2, 26.4-28.0, 29.4-31.0 and 35.2-36.8 s. The sheets are saved as `C:/Users/aryan/clipping_jobs/refs/ana1/dense_*.jpg` and `sheet_0..2.jpg`.
+> Raw study notes. The "Rules for our pipeline" section was written per ref; where it disagrees with `skill/references/01_ishowspeed_clip_style.md` (which reconciles all three refs), ref 01 wins.
+
+Source: `<job>/refs/ref1.mp4`. It is AV1, 1080x1440, 60 fps, 38.87 s long, with AAC 44.1k stereo audio. I looked at the 1 fps frames and at 10 fps dense sheets for 0-1.6, 3-4.6, 6.5-8.1, 9.3-10.9, 22.6-24.2, 26.4-28.0, 29.4-31.0 and 35.2-36.8 s. The sheets are saved as `<job>/refs/ana1/dense_*.jpg` and `sheet_0..2.jpg`.
 
 ## 1. Format and layout
 - **Canvas is 3:4 (1080x1440), not 9:16.** The footage fills the whole frame. There is no letterboxing, no stacking and no blurred background. The source is a professionally shot multi-camera studio piece (white cyclorama, a black armchair, Speed in a Portugal #7 kit, a red-haired woman in magenta). It is not stream footage.
@@ -85,7 +87,7 @@ Source: `C:/Users/aryan/clipping_jobs/refs/ref1.mp4`. It is AV1, 1080x1440, 60 f
   - So: sharpen the subjects, add a soft highlight glow, and stack a fair amount of unsharp mask with a mild glow.
 
 ## 7. Rules for our pipeline to match Ref 1
-1. **Length and canvas:** the final file is ≤ 60 s; this ref is 38.9 s, so aim for 30-50 s. Output 1080x1920 (9:16) by default. This ref uses 3:4 1080x1440, so make it an option. 60 fps if the source allows, otherwise 30. Fill the frame fully, with no letterbox or blur bars.
+1. **Length and canvas:** the final file is ≤ 60 s; this ref is 38.9 s, so aim for 30-50 s. Output 1080x1440 (3:4) like this ref; 1080x1920 (9:16) only on request. 60 fps if the source allows, otherwise 30. Fill the frame fully, with no letterbox or blur bars.
 2. **Cold open:** the first frame is mid-sentence from the strongest premise line, with the caption on screen by 0.1 s. No intro card. The challenge or premise must be stated within 0-2.5 s.
 3. **Story selection:** build one escalating arc (premise, attempt, reaction, repeated 3-5 times, then the biggest reaction last) from several moments of the long video, in their original order. Cut all dead air. Keep wordless action stretches only when the visual pays off (≤ 5 s each), with music under them.
 4. **Cut rate:** 1 real cut every 1.0-2.0 s on average, with shots between 0.6 and 4 s. Alternate the wide/action framing with a tight reaction framing. Every punchline or fail gets a reaction close-up within ≤ 1 s.
@@ -112,7 +114,7 @@ Source: `C:/Users/aryan/clipping_jobs/refs/ref1.mp4`. It is AV1, 1080x1440, 60 f
    - 2-6 frame directional motion-blur whips on the other big cuts.
    - Every other cut is a hard cut.
    - No beat shake, no slow motion, no constant zoom punches.
-9. **Ending:** freeze on the biggest reaction face. Enter it with a 2-4 frame zoom blur, apply a warm/sepia high-contrast meme grade, overlay one 💀 emoji (about 12% of width, mid-height), hold for 1.2-1.8 s, then end. Add an impact SFX on the freeze.
+9. **Ending (optional, only when the moment fits; the skill default is a clean hard cut after the payoff):** freeze on the biggest reaction face. Enter it with a 2-4 frame zoom blur, apply a warm/sepia high-contrast meme grade, overlay one 💀 emoji (about 12% of width, mid-height), hold for 1.2-1.8 s, then end. Add an impact SFX on the freeze.
 10. **Audio:**
     - Speech normalised to about -14 LUFS short-term peaks.
     - A background music bed throughout, ducked to about 10 dB under speech and raised to about -20 dBFS in wordless action stretches.

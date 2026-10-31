@@ -1,6 +1,8 @@
 # Ref 3: "Try to be slightly normal" (deagzzzshorts, IShowSpeed x MrBeast, 146M views)
 
-File: C:/Users/aryan/clipping_jobs/refs/ref3.mp4. 1080x1440 (3:4), 60 fps, 52.22 s. Contact sheets: C:/Users/aryan/clipping_jobs/refs/ana3/sheet_00..04.jpg; dense 10 fps sheets: dsheet_A (0-2.5 s), dsheet_B (19.5-20.7 s), dsheet_C (26-28.4 s).
+> Raw study notes. The "Rules for our pipeline" section was written per ref; where it disagrees with `skill/references/01_ishowspeed_clip_style.md` (which reconciles all three refs), ref 01 wins.
+
+File: <job>/refs/ref3.mp4. 1080x1440 (3:4), 60 fps, 52.22 s. Contact sheets: <job>/refs/ana3/sheet_00..04.jpg; dense 10 fps sheets: dsheet_A (0-2.5 s), dsheet_B (19.5-20.7 s), dsheet_C (26-28.4 s).
 
 ## 1. Format and layout
 - The canvas is **1080x1440 (3:4)**, not 9:16, and the frame is fully filled. The source is 16:9 YouTube/IRL footage (MrBeast "red balls" challenge plus an IShowSpeed stream; frame 0 still shows the stream's chat overlay at the top right). It is centre-cropped and zoomed to fill. There is no letterbox, no stacked layout and no blurred background.
@@ -71,7 +73,7 @@ File: C:/Users/aryan/clipping_jobs/refs/ref3.mp4. 1080x1440 (3:4), 60 fps, 52.22
 
 ## 7. Rules for our pipeline
 1. **Output length** ≤ 60 s. Target 45-55 s and end on a payoff beat with a hard cut, with no outro.
-2. **Canvas:** full-bleed crop with no letterbox or blurred background. The ref uses 1080x1440 (3:4); for our pipeline, render 1080x1920 the same way (full fill), or offer 3:4.
+2. **Canvas:** full-bleed crop with no letterbox or blurred background. The ref uses 1080x1440 (3:4), which is the pipeline default; offer 1080x1920 (9:16, same full fill) on request.
 3. **Hook:** a reaction close-up or the punchline from 0.0 s, with the premise line spoken within 2 s. The music bed is at full level from frame 0 at about -20 dB, under speech at about -16 dB, and continues through gaps with no speech.
 4. **Cuts:** 0.3-1 s jump cuts in the first 3 s, a 2-2.5 s average shot afterwards, and holds of up to 9 s allowed for the action or payoff. Stitch chronological moments from one video into a setup -> attempt -> fail/reaction -> payoff arc.
 5. **Caption text:** ALL CAPS, Montserrat Black (or The Bold Font), cap height about 3% of the frame height, 1-3 words per chunk, entering at the Whisper word start minus 1 frame.

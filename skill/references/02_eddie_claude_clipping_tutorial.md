@@ -1,8 +1,8 @@
 # 02 - Eddie | AI "Claude Code Can Now Clip ANY Video (Free Skill)": workflow and moment-picking
 
-Studied 2026-10-31 from https://youtu.be/IY08-3TS2o8 (Eddie | AI, about 8:20). Raw chapter studies: `C:/Users/aryan/clipping-edit/analysis/tutorials/02_eddie_tutorial.md`. Frames and stills: `C:/Users/aryan/clipping_jobs/tut1/`.
+Studied from the tutorial https://youtu.be/IY08-3TS2o8 (Eddie | AI, about 8:20). Raw chapter study: `analysis/tutorials/02_eddie_tutorial.md` (repo-relative).
 
-**Precedence.** Ref 01 (the IShowSpeed look) is the user's target style and wins on every style question: canvas, captions, accents, SFX, grade and pacing. This ref wins on workflow and moment-picking, where ref 01 says nothing. The user's hard rules override both: final file ≤ 60 s, face tracking always on, CC must be sharper, brighter and more colourful, and 3:4 is the default canvas.
+**Precedence.** Ref 01 (the IShowSpeed look) is the default target style and wins on every style question: canvas, captions, accents, SFX, grade and pacing. This ref wins on workflow and moment-picking, where ref 01 says nothing. The defaults in ref 01 section 0 apply to both (max 60 s, face tracking on, grade beats the source, 3:4 canvas), and anything the request asks for overrides those defaults.
 
 ## Source
 - The demo skill is "Long-Form Clipper" / `Claude-Video-Clipper-main.zip`. It is free behind the Skool "AI Builders Club". Its author says it runs his Instagram at 20 reels a day.
@@ -124,11 +124,11 @@ Studied 2026-10-31 from https://youtu.be/IY08-3TS2o8 (Eddie | AI, about 8:20). R
     - Cache the audio, `transcript.json`, `transcript_lines.txt`, `clips.json` and face tracks.
     - Prompt-level changes (max length, clip count, SFX off, accent colour override, 9:16) re-run only cut, reframe and render, never download or ASR.
 11. **Preflight and run hygiene.**
-    - Check Python imports (yt_dlp, faster_whisper, cv2, numpy), ffmpeg and CUDA.
-    - Download audio-only first for ASR, and run ASR in the background (CUDA int8 on the RTX 3050) while the video downloads.
-    - On a yt-dlp bot block, retry with `--cookies-from-browser chrome`.
+    - Check Python (python3/python/py on PATH) and its imports (yt_dlp, faster_whisper, cv2, numpy, PIL), ffmpeg (PATH, else `imageio_ffmpeg.get_ffmpeg_exe()`), EffectCraft (`EFFECTCRAFT_CLI` or `effectcraft-cli` on PATH; optional) and CUDA (optional).
+    - Download audio-only first for ASR, and run ASR in the background (faster-whisper on CUDA if available, else CPU int8) while the video downloads.
+    - On a yt-dlp bot block, retry with `--cookies-from-browser <browser>` (chrome, firefox, edge, safari...).
     - Note rights: whether the source is the user's own channel or third-party.
-12. **Benchmark.** A 1h43 source should give a ranked list plus 3 rendered clips in ≤ 40 min end to end, with about 1-2 min of render per clip.
+12. **Benchmark.** A 1h43 source should give a ranked list plus 3 rendered clips in ≤ 40 min end to end on a mid-range CUDA GPU (CPU-only ASR takes longer), with about 1-2 min of render per clip.
 
 ### Reframe (SKILL step 4, compatible with ref 01 section 4)
 13. **Shot-aware tracking.**
@@ -139,12 +139,12 @@ Studied 2026-10-31 from https://youtu.be/IY08-3TS2o8 (Eddie | AI, about 8:20). R
 15. **Cut-to-cut scale variation.** When consecutive shots come from the same camera (jump cut), vary the crop scale by 4-10% between them, so the jump does not feel harsh. This changes framing only at a cut, which ref 01 allows ("reframe with cuts"). Stay within ref 01's face-height range of 20-30% H.
 
 ## NOT ADOPTED (and why)
-- **9:16 1080x1920 default.** Ref 01 and the user rule set 3:4 1080x1440. 9:16 is available only on request.
-- **Clips of 60-76 s.** The user's hard rule is ≤ 60 s.
+- **9:16 1080x1920 default.** The default canvas is 3:4 1080x1440 (ref 01). 9:16 is available on request.
+- **Clips of 60-76 s.** The default max is 60 s (overridable per request).
 - **Karaoke active-word recolour, per-word scale-pop, 1-word pages, captions at 58-66% H, neon keyword boxes.** Ref 01 specifies a word-by-word additive build with a 3-frame fade/blur-in, "no bounce and no karaoke recolour/box", semantic keyword colours, 2-4 words per chunk and y = 50% H.
-- **Accent colour from brand, then video, then #FFD60A.** Ref 01 uses a fixed semantic palette (green, yellow, red, magenta, cyan). We keep only their prompt-level colour override, as a user option.
+- **Accent colour from brand, then video, then #FFD60A.** Ref 01 uses a fixed semantic palette (green, yellow, red, magenta, cyan). We keep only their prompt-level colour override, as an option.
 - **Zoom punch-ins every 3-4 s at sentence ends (13-19 per clip).** Ref 01 says "no constant zoom punch-ins", "no zoom changes inside a shot" and "never per-word zoom punches". Only ref 01's mild push-in on long holds remains.
-- **Whooshes on every zoom, from the same 3 files.** Ref 01 puts SFX only on flash or whip accents (1 per 6-8 s), and the user's unique-variant rule forbids reusing one sample. A "no SFX" switch is still honoured.
-- **Static crop per shot with no tracking.** The user rule says face tracking is always on. We take only their per-cut reset (rule 13).
-- **No grade or music bed.** Ref 01 and the user rule require a sharper, brighter and more colourful grade plus a continuous music bed.
-- **Remotion engine and a repo-style installer.** Our ffmpeg + libass + Pillow path already covers this (ref 01). We use the preflight checks without the repo packaging.
+- **Whooshes on every zoom, from the same 3 files.** Ref 01 puts SFX only on flash or whip accents (1 per 6-8 s), and by default no SFX sample is reused within a clip. A "no SFX" switch is still honoured.
+- **Static crop per shot with no tracking.** Face tracking is on by default. We take only their per-cut reset (rule 13).
+- **No grade or music bed.** Ref 01 and the defaults require a sharper, brighter and more colourful grade plus a continuous music bed.
+- **Remotion engine.** Our edit runs in EffectCraft when installed, else the ffmpeg + ASS/libass + Pillow fallback (ref 01, "Editing tool"). We keep their preflight checks.

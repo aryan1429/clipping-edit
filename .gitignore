@@ -1,6 +1,24 @@
+# media
 *.mp4
 *.mkv
 *.webm
+*.mov
 *.wav
 *.m4a
+*.mp3
+*.aac
+*.opus
+*.flac
+# job output
 jobs/
+output/
+frames/
+# secrets
+cookies*.txt
+*.env
+.env*
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/

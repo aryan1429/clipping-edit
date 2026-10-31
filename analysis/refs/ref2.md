@@ -1,5 +1,7 @@
 # Ref 2: "Rule No 1 Never doubt IShowSpeed" (wShortzzzz), 38.67 s, 60 fps
 
+> Raw study notes. The "Rules for our pipeline" section was written per ref; where it disagrees with `skill/references/01_ishowspeed_clip_style.md` (which reconciles all three refs), ref 01 wins.
+
 ## 1. Format and layout
 - **Canvas:** 2160x2880, which is **3:4** and not 9:16. Every frame is a full-bleed crop: no letterbox, no stack, no blurred background. The footage is soft (see sharpness below), so it was probably cropped from 16:9 and upscaled.
 - **Sources:** IRL stream footage, recognisable by the **stream overlay kept in**: live viewer counter "41,775,141" at the top right around y≈20%, plus the chat column at the top right (t 4-5.6, 9.6-9.9, 36.4-38.6). It is mixed with a cleaner vlog camera of the same day. The overlay was left in, not cropped out.
@@ -74,10 +76,10 @@
 - **Saturation:** median HSV sat is **58/255** on normal frames, about 45-100 depending on the shot. That is moderate, roughly +10-15% over flat stream footage: the court red/blue and the jersey blue pop, and skin is not over-orange.
 - **Sharpness:** about **22** (Laplacian variance at 720p), which is low and soft. The 3:4 2160x2880 output is an upscale, and sharpening was not pushed.
 - **Stream shots vs vlog shots:** the raw stream camera shots (the ones with chat overlay, 36-38.6) are darker and flatter (luma 113-128, sat about 50-63) than the vlog camera shots (luma 130-145). So the grade is mild and the difference comes mostly from the source.
-- **Our pipeline should beat this.** Gentle contrast, +vibrance and an unsharp mask will give a crisper result than this reference, which matches the user's request for "sharper, brighter, colorful".
+- **Our pipeline should beat this.** Gentle contrast, +vibrance and an unsharp mask will give a crisper result than this reference, which matches the skill's default grade target: sharper, brighter and more colourful than the source.
 
 ## 7. Rules for our pipeline
-1. **Output length:** ≤60 s (this ref is 38.7 s), 9:16 1080x1920 (the ref is 3:4, but our target stays vertical). Full-bleed crop, no blur bars.
+1. **Output length:** ≤60 s (this ref is 38.7 s), 3:4 1080x1440 like the ref (9:16 1080x1920 on request). Full-bleed crop, no blur bars.
 2. **No intro:** the first frame starts on dialogue. The first caption lands within 0.1 s, and the hook line is the boldest claim of the story.
 3. **Shots:** stitch multiple moments of one story. Remove gaps of ≥0.3 s of dead air. Target an average shot length of 2-2.5 s (range 0.5-7 s), and allow long holds only on the climax action.
 4. **Captions:**

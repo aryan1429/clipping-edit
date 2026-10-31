@@ -1,11 +1,13 @@
 # 02 - Raw chapter studies: "Claude Code Can Now Clip ANY Video (Free Skill)" - Eddie | AI
 
-Source: https://youtu.be/IY08-3TS2o8 . Studied 2026-10-31 in four slices (0-119 s, 119-189 s, 189-343 s, 343-499 s). Frames and stills: `C:/Users/aryan/clipping_jobs/tut1/`. Distilled rules: skill `references/02_eddie_claude_clipping_tutorial.md`.
+Source: https://youtu.be/IY08-3TS2o8 . Studied in four slices (0-119 s, 119-189 s, 189-343 s, 343-499 s). Frames and stills: `<job>/tut1/`. Distilled rules: skill `references/02_eddie_claude_clipping_tutorial.md`.
+
+> Raw notes taken slice by slice; some "ACTIONABLE" ideas below (karaoke recolour, zoom punch-ins every 3-4 s, 9:16 default, whooshes on every zoom) were later rejected. Where these notes disagree with `skill/references/`, the references win (see ref 02's NOT ADOPTED list).
 
 === result+finding ===
 # Tutorial slice report: "Claude Code Can Now Clip ANY Video (Free Skill)" by Eddie | AI, 0 s to 119 s
 
-**Method.** I read every frame from f_0001 to f_0060 (t=0 to 118 s) in 2x2 contact sheets, saved in C:/Users/aryan/clipping_jobs/tut1/sheets_a0/. I also pulled full-resolution stills: C:/Users/aryan/clipping_jobs/tut1/hi_{5,14,16,40,44,52,53,66,72,98,100,101}.png.
+**Method.** I read every frame from f_0001 to f_0060 (t=0 to 118 s) in 2x2 contact sheets, saved in <job>/tut1/sheets_a0/. I also pulled full-resolution stills: <job>/tut1/hi_{5,14,16,40,44,52,53,66,72,98,100,101}.png.
 
 **What this slice does not show.** No terminal output from the clipping pipeline itself appears here: no yt-dlp, whisper or ffmpeg commands, and no face-detection library names. The agent run is shown only as "Working…" followed by the final summary table. The only tool names on screen are in the install preview card at about 44 s (the real install happens at 3:56). The Skool lesson page is deliberately blurred, so its text below is my reconstruction.
 
@@ -118,7 +120,7 @@ Source: https://youtu.be/IY08-3TS2o8 . Studied 2026-10-31 in four slices (0-119 
 
 1. **Hook-first trimming.** Start every clip on the hook line, not where the topic begins. Drop throat-clearing and setup lines before it. Tag the hook line in the selection JSON (`hook_start`), as their HOOK tag on the 22:25 line does. The hook may be the interviewer's question ("Are you a billionaire?"). Allow `hook_speaker != main_speaker`.
 2. **End on a payoff.** Require each candidate to have a closing punchline or resolution. Rule: "works for someone with zero context". Add a self-check that the clip makes sense with no prior context.
-3. **Spread and count.** Sample candidates across the whole source (their markers span 0 to 1h43). Return a ranked list of 3–8 candidates. Our deliverable stays a single clip of 60 s or less, but keep the 3–8 ranked list (title, length, opening line) so the user can pick.
+3. **Spread and count.** Sample candidates across the whole source (their markers span 0 to 1h43). Return a ranked list of 3–8 candidates. Each of our clips stays at 60 s or less by default, but keep the 3–8 ranked list (title, length, opening line) so the user can pick.
 4. **Speaker-labelled, timestamped transcript.** Use word-level ASR (faster-whisper) plus diarization or speaker inference, and render it as `mm:ss  Speaker: line` for the LLM to pick from.
 5. **Shot-aware reframe.** Detect camera cuts (scenedetect or ffmpeg `select='gt(scene,0.3)'`) and choose the crop centre once per shot from the face or active speaker. Add EMA smoothing within a shot, but snap at cuts and never pan across a cut. In a two-shot, follow the active speaker (diarization turn plus face side). Gate output: nobody "half cut off", so face boxes must be fully inside the crop.
 6. **Transcript-driven zooms.** Punch in at the end of a point or sentence, centred on the face box, with the face kept inside the frame.
@@ -135,7 +137,7 @@ Source: https://youtu.be/IY08-3TS2o8 . Studied 2026-10-31 in four slices (0-119 
 ## Conflicts with our IShowSpeed-edit style
 
 - **Canvas.** They render 9:16 at 1080x1920 with a full-height crop. Our style uses a 3:4 canvas. Keep 3:4 for Speed edits and offer 9:16 as an option. Their "face centred, full height" rule still applies inside a 3:4 window.
-- **Clip length.** Their clips run 20–76 s, three of seven over 60 s. Our hard cap is 60 s or less. Trim harder and keep their hook/payoff rule inside the cap.
+- **Clip length.** Their clips run 20–76 s, three of seven over 60 s. Our default cap is 60 s or less. Trim harder and keep their hook/payoff rule inside the cap.
 - **Caption font.** Their font is close to ours (heavy geometric sans, ALL CAPS, 1–3 words). But their size is small and restrained, with one highlighted word and no pop or scale animation. Speed style is Montserrat Black, 2–4 words, bigger, with stronger animation. Adopt only the keyword-highlight rule and their chest-height placement.
 - **Accent density.** "A couple of subtle whooshes" and a few zooms per clip is calmer than our accents every 6–8 s (about 8–10 per minute). Keep our cadence, but take their placement logic: zoom at the end of a point, SFX on the zoom.
 - **Static crop vs smoothed tracking.** They hold a static crop per camera shot, so it barely moves while the speaker gestures. Our style uses a smoothed face crop. Combine the two: smooth within a shot, hard-reset at camera cuts, and use a deadzone so gestures don't drag the crop.
@@ -144,7 +146,7 @@ Source: https://youtu.be/IY08-3TS2o8 . Studied 2026-10-31 in four slices (0-119 
 === before-after ===
 # Slice 119-189 s: before/after auto edit, the "What Claude adds" breakdown, and the re-edit by prompt
 
-Source: "Claude Code Can Now Clip ANY Video (Free Skill)" by Eddie | AI. I extracted every frame at 4 fps (contact sheets in `C:/Users/aryan/clipping_jobs/tut1/ba/sheet_01..24.jpg`) and pulled full-res stills at key moments (`C:/Users/aryan/clipping_jobs/tut1/ba/hi_*.png`). I looked at all of them.
+Source: "Claude Code Can Now Clip ANY Video (Free Skill)" by Eddie | AI. I extracted every frame at 4 fps (contact sheets in `<job>/tut1/ba/sheet_01..24.jpg`) and pulled full-res stills at key moments (`<job>/tut1/ba/hi_*.png`). I looked at all of them.
 
 Most of this slice is a motion-graphics explainer the tutorial author made himself. It has a beige grid background, rounded phone-shaped cards, "Before"/"After" pills and a "What Claude adds" checklist. That presentation is not the skill's output. Only what is inside the 9:16 cards comes from the skill.
 
@@ -214,7 +216,7 @@ What the table tells us about the competitor's output:
 ### Conflicts or differences against our IShowSpeed style
 
 - **Canvas:** they use 9:16 full-bleed; we use 3:4. Keep 3:4, but their per-cut re-centring and face-bbox zoom clamping carry over directly.
-- **Clip length:** their clips run 29-76 s and are not capped at 60. Ours must stay at 60 s or under. Treat their 76 s and 68 s clips as a cautionary example.
+- **Clip length:** their clips run 29-76 s and are not capped at 60. Ours stay at 60 s or under by default. Treat their 76 s and 68 s clips as a cautionary example.
 - **Energy:** their edit is calm podcast style: no b-roll, no progress bar, no hook title card, no shake, SFX only at cuts, and mild zooms. IShowSpeed style wants more frequent and harder accents (every 6-8 s: zoom-punch, shake, keyword box, SFX). Use their rule of anchoring zooms at sentence ends as the placement logic, but add our higher-intensity accents on top.
 - **Caption position:** they place captions at about 64% height. With our 3:4 canvas and a tighter face crop, captions at that height may cover the chin. Check against the face bbox and push them below it.
 - **Highlight colour:** their default is yellow. We use varied accent colours, which fits since they also allow a prompt override (blue).
@@ -222,7 +224,7 @@ What the table tells us about the competitor's output:
 === setup+picking ===
 # Slice 189–343 s: setup and how it picks moments ("Claude Code Can Now Clip ANY Video", Eddie | AI)
 
-I looked at every frame from f_0095 to f_0173, using contact sheets in C:/Users/aryan/clipping_jobs/tut1/sheets_s2/. I also pulled full-res stills at C:/Users/aryan/clipping_jobs/tut1/hi_207.png, hi_224.png, hi_251.png, hi_283.png and hi_339.png.
+I looked at every frame from f_0095 to f_0173, using contact sheets in <job>/tut1/sheets_s2/. I also pulled full-res stills at <job>/tut1/hi_207.png, hi_224.png, hi_251.png, hi_283.png and hi_339.png.
 
 ## 1. What you need (188–207 s)
 - **What he says:** "you only need these two things: Claude Code, which you can download for free, and a paid Claude plan. The pro plan works fine. Everything else Claude will set up for you."
@@ -366,7 +368,7 @@ What he says, verbatim:
 - **Captions:** their captions are 1–2 words. Ours are 2–4 words in Montserrat Black ALL CAPS. Same font family and look, but our phrases are longer.
 - **Effects:** they use "a couple of subtle whooshes" and modest zooms per clip. IShowSpeed-style needs louder, more frequent accents every 6–8 s (SFX, punch zooms, shake), so their "subtle" setting is too tame for us.
 - **Reframe:** they recentre on each camera cut, which is a static crop per shot. We want a smoothed, continuously tracked face crop, so keep our tracker and also reset it on scene cuts.
-- **Number of clips:** they output 3–8 ranked clips. The scoring and ranking transfers directly, but our deliverable may be the single best (#1) clip unless the user asks for more.
+- **Number of clips:** they output 3–8 ranked clips. The scoring and ranking transfers directly, and our default is the top 3 clips scoring >= 7/10 unless the user asks for a different count.
 
 === editing+cost ===
 # Slice 343s-499s: "how it edits" plus the cost comparison with OpusClip

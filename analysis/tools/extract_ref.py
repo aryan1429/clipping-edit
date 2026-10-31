@@ -1,11 +1,34 @@
 """Extract analysis material from a reference short: metadata, cut times, frame grid, transcript.
-usage: python -I extract_ref.py <video.mp4> <outdir>"""
-import sys, os, json, subprocess, cv2, numpy as np
-import imageio_ffmpeg
-src, out = sys.argv[1], sys.argv[2]
+
+Usage:
+    python extract_ref.py <video.mp4> <outdir> [--model small]
+
+Writes <outdir>/frames/tNNN.N.jpg (1 per second, 720 px high) and <outdir>/analysis.json
+(cuts, shot lengths, luma/saturation/sharpness every 0.5 s, word-level transcript).
+Requires: opencv-python, numpy, faster-whisper; ffmpeg on PATH or the imageio-ffmpeg package.
+Transcription uses CUDA when available, else CPU int8.
+Note: if cv2 is installed in user site-packages, do not run python with -I."""
+import argparse, os, json, shutil, subprocess, cv2, numpy as np
+
+
+def ffmpeg_exe():
+    exe = shutil.which("ffmpeg")
+    if exe:
+        return exe
+    import imageio_ffmpeg
+    return imageio_ffmpeg.get_ffmpeg_exe()
+
+
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+ap.add_argument("video"); ap.add_argument("outdir")
+ap.add_argument("--model", default="small", help="faster-whisper model size (default: small)")
+args = ap.parse_args()
+src, out = args.video, args.outdir
 os.makedirs(out + "/frames", exist_ok=True)
 cap = cv2.VideoCapture(src)
 fps = cap.get(cv2.CAP_PROP_FPS); n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+if not cap.isOpened() or fps <= 0:
+    raise SystemExit(f"cannot read video: {src}")
 w, h = int(cap.get(3)), int(cap.get(4))
 prev = None; cuts = []; stats = []; i = 0
 while True:
@@ -24,13 +47,14 @@ while True:
         cv2.imwrite(f"{out}/frames/t{i/fps:05.1f}.jpg", cv2.resize(f, (w * 720 // h, 720)))
     i += 1
 dur = i / fps
-pcm = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-loglevel", "error", "-i", src, "-ac", "1", "-ar", "16000", "-f", "s16le", "-"], check=True, capture_output=True).stdout
+pcm = subprocess.run([ffmpeg_exe(), "-loglevel", "error", "-i", src, "-ac", "1", "-ar", "16000", "-f", "s16le", "-"], check=True, capture_output=True).stdout
 audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768
 from faster_whisper import WhisperModel
-try: m = WhisperModel("small", device="cuda", compute_type="int8_float16")
-except Exception: m = WhisperModel("small", device="cpu", compute_type="int8")
-segs, info = m.transcribe(audio, word_timestamps=True)
-words = [dict(w=x.word, s=round(x.start, 2), e=round(x.end, 2)) for s in segs for x in s.words]
+def transcribe(device, ctype):  # segments are lazy: CUDA library errors only surface while iterating
+    segs, info = WhisperModel(args.model, device=device, compute_type=ctype).transcribe(audio, word_timestamps=True)
+    return [dict(w=x.word, s=round(x.start, 2), e=round(x.end, 2)) for s in segs for x in (s.words or [])], info
+try: words, info = transcribe("cuda", "int8_float16")
+except Exception: words, info = transcribe("cpu", "int8")
 json.dump(dict(src=src, fps=fps, frames=i, dur=round(dur, 2), w=w, h=h, cuts=cuts,
                shot_lengths=[round(b - a, 2) for a, b in zip([0] + cuts, cuts + [dur])],
                stats=stats, lang=info.language, words=words), open(out + "/analysis.json", "w"), indent=1)

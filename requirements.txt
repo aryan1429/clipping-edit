@@ -1,0 +1,8 @@
+yt-dlp
+faster-whisper
+opencv-python
+numpy
+Pillow
+imageio-ffmpeg
+# Optional: torch (CUDA build) only if you add GPU-based extras; faster-whisper uses CTranslate2 and does not need it.
+# torch

@@ -1,6 +1,6 @@
-# 01 - IShowSpeed clipping-short style (user target style)
+# 01 - IShowSpeed clipping-short style (default target style)
 
-Studied 2026-10-31 from the three reference Shorts the user sent ("these are the example type video"). This file **overrides `SKILL.md` step 5** (karaoke captions, lower-middle). Captions here are centred, build word by word, and use semantic keyword colours.
+Studied from three reference Shorts (URLs below). This file is the full style spec behind `SKILL.md` steps 4-7 and wins on every style question. Captions are centred, build word by word, and use semantic keyword colours (no karaoke).
 
 ## Sources
 
@@ -10,7 +10,7 @@ Studied 2026-10-31 from the three reference Shorts the user sent ("these are the
 | 2 | https://youtube.com/shorts/GbkSKbdsxZs | wShortzzzz, "Rule No 1 Never doubt IShowSpeed" | 38.67 s | 2160x2880 (3:4), 60 fps | IRL stream + vlog cam, upscaled, soft |
 | 3 | https://youtube.com/shorts/LCS-pKmkb88 | deagzzzshorts, "Try to be slightly normal" (Speed x MrBeast, 146M views) | 52.22 s | 1080x1440 (3:4), 60 fps | 16:9 YouTube/stream footage, centre-cropped |
 
-The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.md`. The local media and contact sheets are in `C:/Users/aryan/clipping_jobs/refs/` (`ref*.mp4`, `ana1/`, `ana2/`, `ana3/`).
+The full studies are in `analysis/refs/ref{1,2,3}.md` of the repo (not part of the installed skill folder); `analysis/tools/extract_ref.py` re-extracts frames and measurements from a downloaded ref.
 
 ## Per-ref summary
 
@@ -74,28 +74,31 @@ The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.m
 
 | Topic | Ref 1 | Ref 2 | Ref 3 | **Default** |
 |---|---|---|---|---|
-| Canvas | 3:4 | 3:4 | 3:4 | **1080x1440 3:4, 60 fps** (all refs agree; user said match these refs). `--aspect 9:16` gives 1080x1920 only on request |
+| Canvas | 3:4 | 3:4 | 3:4 | **1080x1440 3:4, 60 fps** (all refs agree). 9:16 1080x1920 only on request |
 | Caption y | 50-52% | 47% / 52% | 25% or 75% | **centre at 50% of H**; move to 72% if the text box overlaps the mouth or eyes box of a tracked face |
 | Words per chunk | 2-6, word build | 2-6, word build | 1-3, chunk at once | **2-4 words (max 6), max 2 lines, word-by-word additive build** |
 | Outline | none, wide soft shadow | thin dark stroke + shadow | glow + thin shadow | **thin dark stroke (4% of font size) + soft black shadow (blur ~1x cap height, 55%) + same-colour glow on accent words** |
 | Colour use | white + accent keywords | white + 1-3 keywords | one colour per chunk | **white base + 1-3 semantic keywords; a whole chunk may take one colour for exclamations/second speaker** |
 | Flash density | ~6 / 40 s | ~50% of cuts | 3-5 / min | **1 accent per 6-8 s (5-8 per 45 s), never more than 40% of cuts** |
 | Pace (avg shot) | 1.5 s | 2.2 s | 2-2.5 s | **1.8-2.2 s average; 0.3-1 s jump cuts in the first 3 s; holds up to 7 s only on the action/climax** |
-| Ending | meme freeze + 💀 | emoji fly-in + title + fade | hard cut | **normal clean ending by default** (hard cut on the payoff/last reaction line, ref 3). Meme freeze + 💀 ONLY when the clip is a comedic fail/"no way" reaction moment that fits it (user 2026-10-31: not every clip has the skull) |
+| Ending | meme freeze + 💀 | emoji fly-in + title + fade | hard cut | **normal clean ending by default** (hard cut on the payoff/last reaction line, ref 3). Meme freeze + 💀 ONLY when the clip is a comedic fail/"no way" reaction moment that fits it; most clips do not get it |
 | Music in tension | stays | muted, then build-up | stays | **continuous, ducked**; optional 2-4 s mute before the climax |
 | Grade level | luma 209 (studio) | 133 (mild) | 154, sat 93 | **ref 3 targets** (see grade) |
 | Close-face size | 18-25% H | 20-28% H | 25-35% H | **24% H (range 20-30%)** |
 
 ## STYLE SPEC (measurable)
 
-### 0. Hard user rules (non-negotiable)
-1. **Final file is ≤ 60.0 s.** Target 35-55 s. The render step asserts `duration <= 59.5 s` with ffprobe and re-cuts if it fails.
-2. **Face tracking is always on.** Every speaking shot is face-tracked and the crop is never a blind centre crop. The exception is a deliberate wide action shot that keeps all subjects in frame.
-3. **Colour correction must look sharper, brighter and more colourful than the source.** Measure source against output on the same frames. All three must hold:
+### 0. Defaults (apply unless the request overrides them)
+1. **Max clip length 60 s.** Target 35-55 s. The render step asserts `duration <= 59.5 s` (ffprobe, or `ffmpeg -i` when ffprobe is absent) and re-cuts if it fails.
+2. **Face tracking on.** Every speaking shot is face-tracked and the crop is never a blind centre crop. The exception is a deliberate wide action shot that keeps all subjects in frame.
+3. **The grade must measurably beat the source: brighter, more saturated, sharper.** Measure source against output on the same frames. All three must hold:
    - mean luma +10% or more
    - median HSV saturation +25% or more
    - Laplacian variance (720p) ×1.4 or more
-4. **Captions may use EffectCraft or whatever fits best.** The recommended tool is below.
+4. **Canvas 1080x1440 3:4, 60 fps** (30 fps if the source is under 50 fps; 1080x1920 9:16 on request).
+5. **Ending:** clean hard cut after the payoff; meme freeze + 💀 optional, only when the moment fits.
+6. **Clip count:** show all 3-8 candidates; render the top 3 scoring >= 7/10, always at least #1 (see ref 02).
+7. **Editing tool:** EffectCraft when installed, else the ffmpeg + ASS/libass + Pillow fallback (see "Editing tool" below).
 
 ### 1. Canvas and layout
 - 1080x1440 (3:4) 60 fps, h264 CRF 18 or lower, `yuv420p`, AAC 192k, 48 kHz.
@@ -114,7 +117,7 @@ The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.m
 - The "hook text" is the caption itself. Do not add a hook banner (none of the refs do). If the clip needs context, add one asterisk line (for example "*SPEED CHALLENGES HER*") in the caption style for ≤ 1.5 s.
 
 ### 3. Captions
-- **Font:** Montserrat Black (`C:/Windows/Fonts/Montserrat-Black.ttf`, installed). Fallback: Montserrat ExtraBold, then Arial Black.
+- **Font:** Montserrat Black (free on Google Fonts; install it or point the renderer at the .ttf). Fallback: Montserrat ExtraBold, then Arial Black.
   - ALL CAPS, tracking 0, straight apostrophes.
 - **Size:** cap height 3.3% H (about 63 px at 1920), so font size about 90 px at 1920 (Montserrat cap height ≈ 0.70 em). At 1440: about 68 px.
   - Max line width 80% W. Max 2 lines; line 2 sits directly under line 1 (line gap 0.15 em).
@@ -179,9 +182,9 @@ The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.m
 
 - In total, 1 accent per 6-8 s, and never more than 40% of cuts. Every other cut is a hard cut.
 - **Never use:** beat shake, per-word zoom punches, slow motion, speed ramps or a split screen.
-- **SFX:** one SFX per flash or whip (whoosh, impact, riser hit), each a different variant (see the user's unique-variant rule). Add an impact hit on the ending freeze (when one is used).
+- **SFX:** one SFX per flash or whip (whoosh, impact, riser hit), each a different variant (never reuse one sample within a clip). Add an impact hit on the ending freeze (when one is used).
 - **Ending (default = normal clipping ending):** hard cut right after the payoff line / last reaction, no trailing silence; ideally the last frame flows into a replay (ref 3). Most clips end this way.
-- **Optional meme-freeze ending** (only when the moment is a comedic fail/shock reaction where it clearly fits; never automatic, user 2026-10-31):
+- **Optional meme-freeze ending** (only when the moment is a comedic fail/shock reaction where it clearly fits; never automatic):
   - 2-4 frame zoom/radial blur into a freeze of the biggest reaction face
   - warm/sepia high-contrast meme grade
   - one 💀 PNG (12% W, at mid-height, centre-left)
@@ -215,7 +218,7 @@ The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.m
 - **Reference ffmpeg chain** (after the crop/scale to the output size):
   `eq=brightness=0.04:contrast=1.12:saturation=1.2,vibrance=intensity=0.3,colorbalance=rm=0.02:bm=-0.02,unsharp=5:5:1.0:5:5:0.0`, plus a glow (split, `gblur=sigma=20`, `blend=all_mode=screen:all_opacity=0.15`), plus an optional `vignette=PI/5`.
   - For upscaled sources (scale > 1.5x), denoise with `hqdn3d=1.5:1.5:6:6` before sharpening, use `scale=flags=lanczos`, and raise the unsharp amount to 1.3.
-- **QC gate:** sample 1 frame per second from source and output and check the three ratios from the hard rules. If any check fails, raise that parameter and re-render.
+- **QC gate:** sample 1 frame per second from source and output and check the three ratios from the defaults (section 0). If any check fails, raise that parameter and re-render.
 
 ### 8. Pacing and length
 - Length: 35-55 s target, ≤ 60 s hard (≤ 59.5 s asserted).
@@ -225,18 +228,23 @@ The full studies are in `C:/Users/aryan/clipping-edit/analysis/refs/ref{1,2,3}.m
 - Structure: hook/premise (0-3 s), then setup, then attempts and reactions escalating 2-5 times, then the biggest reaction or payoff last, then the ending (clean hard cut by default; meme freeze only when it fits).
   - Moments stay in source order.
 
-## Editing tool: EffectCraft (user choice, 2026-10-31) - SUPERSEDES the earlier libass recommendation
+## Editing tool: EffectCraft when available, ffmpeg + ASS/libass + Pillow as fallback
 
-The user said: "for editing software, u can use effect craft". The edit (captions, zooms, flashes, stickers, optional freeze ending, grade) is built **by script in EffectCraft**, the same way as the AMV edits. Binary, build/render commands and EC gotchas: memory `amv-effectcraft-port` + amv-edit skill ref 19 (portable 0.16.0 `effectcraft-cli.exe`; run the update check first).
+**Default:** build the edit (captions, flashes, whips, stickers, optional freeze ending, grade) **by script in EffectCraft** (https://github.com/storytold/effectcraft, an open-source After Effects-style compositor with a CLI). Find the binary via the `EFFECTCRAFT_CLI` env var, else `effectcraft-cli` on PATH. If neither exists, use the fallback below.
 
 Split of work:
 - **Python/ffmpeg (prep):** download, transcribe (word timestamps), pick moments, cut + concat the source segments to an intermediate (high bitrate / near-lossless, keep 60 fps), face detection -> smoothed crop path per frame (reset at camera cuts), caption chunk list with keyword colours, accent/SFX timeline, audio mix (dialogue -14 LUFS + ducked music + SFX).
-- **EffectCraft (edit):** 1080x1440 60 fps comp; source layer with Position/Scale keyframes from the crop path (that is the face tracking); text layers per caption chunk (Montserrat Black, ALL CAPS, word-by-word build via per-word layers or text animators, stroke + shadow + glow on keywords); zoom punches, flashes/whips, sticker PNGs; grade on an adjustment layer (Brightness/Contrast, Hue/Sat or Vibrance, Unsharp/Sharpen, glow via blurred copy in Screen - remember adjustment-layer blend modes are ignored in EC, use CC Composite).
-- **Render:** EC render at high bitrate (>= 30000 kbps), `--parts` if memory runs out; finish with ffmpeg mux of the mixed audio using `-c:v copy` (no second video encode, to keep it sharp); verify duration <= 59.5 s.
-- **Fallback:** if EC cannot do something (e.g. colour emoji text), render it as a Pillow PNG and import it as a footage layer. ASS/libass captions are a fallback only if EC fails outright.
+- **EffectCraft (edit):** 1080x1440 60 fps comp; source layer with Position/Scale keyframes from the crop path (that is the face tracking); text layers per caption chunk (Montserrat Black, ALL CAPS, word-by-word build via per-word layers or text animators, stroke + shadow + glow on keywords); flashes/whips, sticker PNGs; grade on an adjustment layer (Brightness/Contrast, Hue/Sat or Vibrance, Unsharp/Sharpen, glow via a blurred copy in Screen).
+- **EffectCraft gotchas:**
+  - Adjustment-layer blend modes are ignored: use CC Composite (or a precomp) for Screen/Add glows.
+  - If a long or large comp runs out of memory, render it in parts (`--parts`) and concat with ffmpeg.
+  - Render at high bitrate (>= 30000 kbps), then mux the mixed audio with ffmpeg `-c:v copy` (no second video encode, keeps it sharp). Verify duration <= 59.5 s.
+  - Anything EC cannot draw (e.g. colour emoji) -> render it as a Pillow PNG and import it as a footage layer.
+
+**Fallback (no EffectCraft): ffmpeg + ASS/libass + Pillow** (the original recommendation). Captions as an ASS subtitle file (per-word `\fad`/`\blur`/`\fscx` tags for the 3-frame build, `\bord`/`\shad` for stroke and shadow, a second blurred layer for the glow) burned in with ffmpeg's `ass`/`subtitles` filter; crop path via `sendcmd` or per-shot `crop` expressions; flashes, whips and stickers as Pillow PNGs or ffmpeg `overlay`/`blend` layers; grade with the reference chain in section 7. One final encode only (h264 CRF <= 18).
 
 ## QC checklist before delivery
-- [ ] ffprobe duration ≤ 59.5 s; 1080x1440 3:4 (or 1080x1920 if 9:16 was asked for); audio present.
+- [ ] Duration ≤ 59.5 s (ffprobe or `ffmpeg -i`); 1080x1440 3:4 (or 1080x1920 if 9:16 was asked for); audio present.
 - [ ] Frame 0 has speech or a reaction; caption visible by 0.1 s; premise within 2.5 s.
 - [ ] On 1 fps samples, the face is fully in frame on every close shot, eyes at y 22-35%, and the crop has no jitter (frame-to-frame centre delta < 0.5% W when there is no cut).
 - [ ] Captions sit within ±2 frames of the whisper word starts, never cover the mouth, stay inside 80% W, profanity is censored, and accent colours are used.
