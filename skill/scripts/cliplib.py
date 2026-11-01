@@ -26,7 +26,7 @@ from fractions import Fraction
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-LIB_VERSION = "1.0.0"
+LIB_VERSION = "1.1.0"
 
 # Windows NTSTATUS exit codes that mean the ffmpeg build itself is broken (missing or bad DLLs).
 BROKEN_BUILD_CODES = {3221225781: "STATUS_DLL_NOT_FOUND", 3221225595: "STATUS_INVALID_IMAGE_FORMAT",
@@ -182,6 +182,23 @@ def t6(x):
     return "0.000000" if s == "-0.000000" else s
 
 
+def t6_frame(k, fps):
+    """Start time of frame k at `fps`, floored to the microsecond in integer math (ref 03 section 2, Frame grid)."""
+    f = Fraction(fps)
+    us = (int(k) * 1_000_000 * f.denominator) // f.numerator
+    return f"{us // 1_000_000}.{us % 1_000_000:06d}"
+
+
+def boundary_frame(t, fps):
+    """Segment boundary: the nearest frame edge, round(t*fps) (ref 03 section 2, Frame grid)."""
+    return int(math.floor(float(t) * float(Fraction(fps)) + 0.5))
+
+
+def event_frame(t, fps):
+    """Displayed event or sample: the frame showing t, floor((t + 0.0005)*fps + 1e-6) (ref 03 section 2, Frame grid)."""
+    return int(math.floor((float(t) + 0.0005) * float(Fraction(fps)) + 1e-6))
+
+
 def frac_str(f):
     f = Fraction(f)
     return f"{f.numerator}/{f.denominator}"
@@ -208,7 +225,7 @@ def parse_rate(s):
     if abs(p - round(p)) < 0.005:
         return Fraction(round(p))
     n = round(p * 1.001)
-    if abs(p - n * 1000 / 1001) < 0.006:
+    if abs(p - n * 1000 / 1001) < 0.005:
         return Fraction(n * 1000, 1001)
     return Fraction(p).limit_denominator(1001)
 
@@ -477,7 +494,7 @@ def decode_audio(path, ffmpeg, sr=48000, channels=1, start=None, duration=None, 
     if channels == 1 and (src_channels or 2) == 2:
         chain.append("pan=mono|c0=0.5*c0+0.5*c1")
     elif channels == 2 and src_channels == 1:
-        chain.append("pan=stereo|c0=c0|c1=c0")
+        chain.append("pan=stereo|FL=FL+FC|FR=FR+FC")
     chain.append(f"aresample={sr}")
     cmd = [ffmpeg, "-v", "error", "-nostdin"]
     if start is not None:
