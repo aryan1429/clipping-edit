@@ -89,6 +89,7 @@ Every default below can be overridden in your prompt. For example: "9:16", "45 s
 | Ending | clean hard cut after the payoff; the meme freeze + 💀 is used only when the moment fits |
 | Editor | EffectCraft if installed, else ffmpeg + ASS/libass + Pillow |
 | Transcription | faster-whisper with word timestamps; CUDA if available, else CPU int8 |
+| Music | a mood-matched instrumental bed under the speech: CC0, PD, CC BY or royalty-free only (never NC, ND or SA), found by `skill/scripts/find_music.py` from your music folder, Openverse or Jamendo, with a credit line when the licence needs one |
 
 ## Repo layout
 
@@ -109,8 +110,8 @@ tests/                 synthetic-media tests for the scripts (repo only); fixtur
 ## Status
 
 - Done: the style spec, the moment-picking rules and the end-to-end workflow in `SKILL.md`.
-- In progress: a study of [HeyGen HyperFrames](https://github.com/heygen-com/hyperframes) (Apache-2.0). It covers frame-exact transcript cuts, click-free splices, ducking from word timings, loudness and true-peak gates, BT.709 tagging, HDR/VFR intake, cut detection, caption timing contracts and review sheets. Raw notes and draft rules are in `analysis/repos/`. The verified rules become `skill/references/03-05`.
-- In progress: the stage scripts. Done so far: shared helpers (`skill/scripts/cliplib.py`) and test fixtures. Until the scripts land, Claude writes the stages per job by following the references.
+- Done: a study of [HeyGen HyperFrames](https://github.com/heygen-com/hyperframes) (Apache-2.0). It covers frame-exact transcript cuts, click-free splices, ducking from word timings, loudness and true-peak gates, BT.709 tagging, HDR/VFR intake, cut detection, caption timing contracts and review sheets. Raw notes are in `analysis/repos/`; the verified rules are `skill/references/03-05`.
+- Done: tested stage scripts in `skill/scripts/` (`probe_source`, `cutlist`, `splice`, `cuts`, `mix_audio`, `finalize_mux`, `grade_gate`, `find_music`). They cover intake, cutting, audio, music, the final mux and the gates; run `python -P tests/test_<name>.py` for each. Still written per job by following the references: reframe, captions and grade rendering.
 
 ## Responsible use
 

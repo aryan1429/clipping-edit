@@ -20,6 +20,7 @@ Long video -> best moments -> finished short clips. Style spec = `references/01_
 | Grade pipeline and grade gates | ref 04 §3 |
 | QC gates, review sheets, reference studies | ref 05 §1 |
 | Caching, re-edits, versions, lessons loop | ref 05 §2 |
+| Picking non-copyright background music | ref 06 |
 
 Refs 03-05 come from a study of HeyGen HyperFrames (Apache-2.0). They win on technical correctness where 01/02 are silent and never on style.
 
@@ -36,11 +37,12 @@ Any of these can be changed by the request ("9:16", "under 30 s", "all clips", "
 | Clip count | Show all 3-8 candidates; render the top 3 scoring >= 7/10, always at least #1 |
 | Editing tool | EffectCraft when installed; otherwise ffmpeg + ASS/libass + Pillow |
 | SFX | One per accent, each a different variant (never reuse one sample) |
+| Music bed | Instrumental, mood-matched, licence-safe (CC0 / PD / CC BY / royalty-free; never NC, ND or SA) from `scripts/find_music.py`; credit line in `captions.md` when the licence needs one |
 
 ## Setup / preflight
 Run `<python> <skill dir>/scripts/preflight.py` (the skill dir is the folder holding this SKILL.md, e.g. `~/.claude/skills/clipping-edit`; in a repo checkout it is `skill/`). It prints a status table and a `PREFLIGHT_JSON {...}` line with resolved paths; exit 1 means a required piece is missing.
 - **Required:** Python 3.9+ with `yt_dlp`, `faster_whisper`, `cv2` (opencv-python), `numpy`, `PIL` (pillow); ffmpeg. Install: `<python> -m pip install yt-dlp faster-whisper opencv-python numpy pillow imageio-ffmpeg` (same list as the repo's `requirements.txt`).
-- **Optional:** CUDA GPU, EffectCraft CLI, ffprobe, Montserrat Black font (`torch` only as a second CUDA probe; faster-whisper does not need it).
+- **Optional:** CUDA GPU, EffectCraft CLI, ffprobe, Montserrat Black font (`torch` only as a second CUDA probe; faster-whisper does not need it). For music: a local music folder with a `licences.json` manifest, and optionally `JAMENDO_CLIENT_ID` (free key) so `find_music.py` can also search Jamendo (ref 06).
 
 ### Tool discovery (never hard-code paths)
 - **Python:** the first of `python3`, `python`, `py -3` on PATH.
@@ -93,7 +95,7 @@ One-line trigger ("clip this video: <url>"): run the whole job without asking qu
    - Two people: use a wider crop that holds both. Never use a split screen.
    - Gate: the face bbox plus a 5% margin is always inside the frame, including after any push-in or zoom.
 5. **Captions (ref 01 section 3).** Montserrat Black ALL CAPS, 2-4 word chunks building word by word, white + 1-3 semantic keyword colours, centred at ~50% height, moved to ~72% if over the face.
-6. **Polish (ref 01).** Hook = strongest line from frame 0 (no banner); music full from frame 0; accents (flash/whip + unique SFX) every ~6-8 s; ending per the Defaults table; grade the footage only, under accents and captions (ref 04 §3), then verify the gains with `scripts/grade_gate.py`. Accents start at full peak on their cause frame; each SFX peak lands on accent frame + 1 (ref 04 §2, ref 03 §3). Audio: `scripts/mix_audio.py` (static gain to -14 LUFS, bed at its strongest section, word-timed duck -10 dB with 20 ms / 300 ms ramps, limiter last; ref 03 §3).
+6. **Polish (ref 01).** **Music bed (ref 06):** `scripts/find_music.py --mood <hype|tense|funny|emotional|chill|epic|inspiring, from the transcript> --clip-s <len> --dialogue clips/NN/dialogue.wav --library <music folder> --choose --out-dir clips/NN` writes `bed.<ext>` + `music.json`. Its `bed` block goes into `audio_plan.json` and its `attribution` into `captions.md`. On exit 1, follow its `hints`. Never put trending or chart songs in the exported MP4. Hook = strongest line from frame 0 (no banner); music full from frame 0; accents (flash/whip + unique SFX) every ~6-8 s; ending per the Defaults table; grade the footage only, under accents and captions (ref 04 §3), then verify the gains with `scripts/grade_gate.py`. Accents start at full peak on their cause frame; each SFX peak lands on accent frame + 1 (ref 04 §2, ref 03 §3). Audio: `scripts/mix_audio.py` (static gain to -14 LUFS, bed at its strongest section, word-timed duck -10 dB with 20 ms / 300 ms ramps, limiter last; ref 03 §3).
 7. **Edit and render** (see Editing paths below), h264 + AAC.
    - Output: `raw/NN-slug.mp4` (reframed only) and `edited/NN-slug.mp4`.
    - Log one line per clip: `ok NN-slug.mp4 dur:XX.Xs accents:N captions:N`.
@@ -121,6 +123,7 @@ One-line trigger ("clip this video: <url>"): run the whole job without asking qu
 - `references/01_ishowspeed_clip_style.md`: target look (canvas, captions, accents, grade, QC). Wins on all style questions.
 - `references/02_eddie_claude_clipping_tutorial.md`: Eddie | AI's Claude clipper (https://youtu.be/IY08-3TS2o8): hook-first/payoff picking, hook types, /10 ranking, 3-8 candidates, title + post caption, shot-cut reframe reset, output layout, cached re-edits. Wins on workflow and picking; its NOT ADOPTED list shows conflicts with ref 01.
 - `references/03_hyperframes_media_pipeline.md`, `04_hyperframes_captions_framing_grade.md`, `05_hyperframes_qc_workflow.md`: mechanics and gates from a study of HeyGen HyperFrames (Apache-2.0). See "What to read when".
-- **Scripts** (`scripts/`, each prints one JSON object; exit 0 ok, 1 gate failed, 2 bad input; ffprobe optional): `probe_source.py`, `cutlist.py`, `splice.py`, `cuts.py`, `mix_audio.py`, `finalize_mux.py`, `grade_gate.py`, with shared helpers in `cliplib.py`. Run with `<python> -P`. Tests live in the repo's `tests/`.
+- **Scripts** (`scripts/`, each prints one JSON object; exit 0 ok, 1 gate failed, 2 bad input; ffprobe optional): `probe_source.py`, `cutlist.py`, `splice.py`, `cuts.py`, `mix_audio.py`, `finalize_mux.py`, `grade_gate.py`, `find_music.py`, with shared helpers in `cliplib.py`. Run with `<python> -P`. Tests live in the repo's `tests/`.
+- `references/06_background_music.md`: choosing a bed (mood → BPM and energy, no vocals under speech, a strong entry from frame 0, phone-speaker low end), sources ranked by safety with verified terms, the licence policy (CC 4.0: syncing music to video makes Adapted Material, so no ND or SA; no NC), Content ID and in-app-sound caveats, and the credit-line format.
 - **New reference shorts** (needs a clone of the repo; `analysis/` is not part of the installed skill folder): download them, run `<python> analysis/tools/extract_ref.py <video.mp4> <outdir>` (metadata, cut times, 1 fps frame grid, luma/sat/sharpness stats, transcript), write the study to `analysis/refs/`, then distil the rules into `references/NN_<topic>.md` (what the editor does, timings, caption style, tools, and the rule it implies for this pipeline).
 - **New tutorials:** one `references/NN_<topic>.md` per video, raw notes in `analysis/tutorials/`.
