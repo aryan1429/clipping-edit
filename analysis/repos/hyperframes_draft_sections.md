@@ -1,71 +1,96 @@
-# HyperFrames study: draft sections
+# HyperFrames study: verified draft sections
 
-Working draft of the distilled rules from the HyperFrames study (see `hyperframes.md` in this folder for method and raw notes).
-Status per section: **verified** = an independent verifier re-opened every HyperFrames citation, re-ran every ffmpeg command on synthetic media and applied the one-owner-per-topic map; **pending** = synthesized and tested by its author, independent verification still running.
-The final, reconciled rules will live in `skill/references/03-05`; until then this file is not part of the installed skill.
+Distilled rules from the HyperFrames study (method and raw notes: `hyperframes.md` in this folder).
+All 9 sections are independently verified. Verifiers re-opened every HyperFrames citation (693 claims checked, 62 refuted and fixed or removed, 91 line ranges corrected). They re-ran every ffmpeg command or snippet on synthetic media (360 runs, 15 failures fixed) and applied one owner per topic.
+Next step: the cross-section reconciliation turns these into `skill/references/03-05`. Until then this file is not part of the installed skill.
 
-<!-- G1 = ref 03 §1 | pending verification -->
-> **ref 03 §1 — pending verification**
+<!-- G1 = ref 03 §1 | verified (fixed) -->
+> **ref 03 §1: verified**
 
 ## Source intake: probe, normalise, ASR words
 Scope: download -> `source_facts.json` + `transcript.json`. Tested on ffmpeg 7.1.
 
 ### Adopted (default)
-1. **Probe once.** `source_facts.json`: displayed W x H (swap if rotation % 180 = 90), SAR, `fps_r` (`num/den`), `fps_avg`, `vfr` = abs(avg - r) / r > 1%, colour tags, audio, duration. No ffprobe: parse `ffmpeg -hide_banner -i SRC` stderr (`fps` = avg, `tbr` = r); snap a printed rate p to round(1.001p) or x1000/1001 if within 0.005.
-   Why: canvas fps, crop maths and the HDR gate read these facts.
-   HF: packages/cli/src/measure/media.ts:109-134, packages/engine/src/services/videoFrameExtractor.ts:220-227
-2. **SDR at download.** Refines SKILL step 1 (old: "the best mp4"): `-f "bv*[dynamic_range=SDR][ext=mp4]+ba[ext=m4a]/bv*[dynamic_range=SDR]+ba/bv*+ba/b"`. HDR = transfer `smpte2084`/`arib-std-b67` only; BT.2020 primaries alone are SDR.
-   Why: yt-dlp sorts HDR first (an mp4-only selector chose AV1 HDR10).
+1. **Probe once.** Write `source_facts.json`:
+   - displayed W x H (swap if rotation % 180 = 90), SAR, duration, audio; `fps_r` (`num/den`), `fps_avg`, `vfr` = abs(avg - r) / r > 1%;
+   - matrix/primaries/transfer/range; untagged matrix: bt709 if H >= 720 and not VP9/AV1, else smpte170m.
+   - No ffprobe: `ffmpeg -hide_banner -i SRC` stderr (`N fps` = avg, `N tbr` = r); W x H from the comma part matching `^\d+x\d+`; snap a printed rate p to n = round(1.001p) or n x 1000/1001 if within 0.005.
+   Why: later steps read these.
+   HF: packages/cli/src/measure/media.ts:109-134, packages/engine/src/services/videoFrameExtractor.ts:220-227,971-979
+2. **SDR at download.** Refines SKILL step 1 (old: "the best mp4"): `-f "bv[dynamic_range=SDR][ext=mp4]+ba[ext=m4a]/bv[dynamic_range=SDR]+ba/bv*+ba/b"`. HDR = transfer `smpte2084`/`arib-std-b67`; BT.2020 primaries alone are SDR.
+   Why: yt-dlp sorts HDR first ("best mp4" took AV1 HDR10 in a test); `bv` (video-only) skips 360p combined SDR.
    HF: packages/engine/src/utils/hdr.ts:16-21
-3. **Normalise in every clip intermediate.** Every ffmpeg read of the source for a clip starts `-vf` with `norm_vf` = `fps=<canvas>` (first; scale-then-fps lost a frame), + `scale=trunc(iw*sar/2)*2:ih,setsar=1` if SAR != 1, + rule 4 if HDR, + `scale=in_color_matrix=bt601:out_color_matrix=bt709` if BT.601, + `setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv` (libx264 ignored `-color_primaries/-color_trc`); `-c:v libx264 -crf 12 -preset medium -pix_fmt yuv420p`. Face tracking, cut detection and cv2 read only this file.
-   - Refines ref 01 §1 (old: "60 fps if the source is 50/60, otherwise 30"): judge `fps_avg` >= 50.
-   - Re-time only with `fps=` (integer or `num/den`, never `29.97`); never input `-r`/`setpts` (0.1% = 60 ms/min drift).
-   Why: cv2 timed a VFR file at 48.16 fps, up to 0.488 s off; BT.601 red relabelled 709 decoded (255,23,0).
-   HF: packages/cli/src/commands/measure/probe.ts:29-66, packages/core/src/fps.ts:63-71
-4. **HDR fallback.** `zscale=t=linear:npl=100,tonemap=hable:desat=0,zscale=p=bt709:t=bt709:m=bt709:r=tv,scale=out_color_matrix=bt709:out_range=tv`. Tags missing on frame 0 (`showinfo`): prefix `setparams=` from the probe, else bt2020nc/bt2020. No `zscale`/`tonemap` in `ffmpeg -filters`: stop with a fix hint. Refines ref 01 §7: grade ratios use this SDR copy.
-   Why: PQ/HLG read as SDR skews detection and the grade gate; untagged RGB->YUV still used BT.601 here (red Y 81, not 63).
+3. **Normalise every clip read.** Every ffmpeg read of source video starts `-vf` with `norm_vf`:
+   - `fps=<canvas>` first (scale-then-fps lost a frame: 89 of 90);
+   - `scale=trunc(iw*sar/2)*2:ih,setsar=1` if SAR != 1;
+   - HDR: **HDR fallback**; SDR BT.2020: its tail from `zscale=p=bt709`; BT.601: `scale=in_color_matrix=bt601:out_color_matrix=bt709`;
+   - last `setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv`.
+   - Encode: → ref 03 §4 **Seekable mezzanine**. cv2 never opens the raw download; detectors may set their own `fps=`.
+   - Refines ref 01 §1 and Defaults Canvas (old: "60 fps if the source is 50/60"): 60 when `fps_avg` >= 50.
+   - Re-time only with `fps=`; never relabel the rate (input `-r`, `setpts=PTS*k`): 0.1% = 60 ms/min drift.
+   Why: cv2 indexed VFR at 48.16 fps, up to 0.488 s off; relabelled BT.601 red decoded (255,23,0), BT.2020 (200,60,40) as (171,87,52); converted (251,0,0), (199,58,39).
+   HF: packages/cli/src/commands/measure/probe.ts:46-66, packages/engine/src/services/videoFrameExtractor.ts:1171-1173
+4. **HDR fallback.**
+   - `zscale=t=linear:npl=100,tonemap=hable:desat=0,zscale=p=bt709:t=bt709:m=bt709:r=tv,scale=out_color_matrix=bt709:out_range=tv`;
+   - tags missing on frame 0 (`-frames:v 1 -vf showinfo`): prefix `setparams=` from the probe, else bt2020nc/bt2020; untagged, zscale fails;
+   - no `zscale`/`tonemap` in `ffmpeg -hide_banner -filters`: stop with a fix hint.
+   - Refines ref 01 §0.3 (old: "Measure source against output"): HDR source frames = this SDR copy.
+   Why: PQ read as SDR: SATAVG 23 vs 64 tone-mapped; unnamed matrix: pure red/green Y 73/181, not 63/173.
    HF: packages/core/src/hdrToneMap.ts:15-43, packages/studio-server/src/helpers/proxyTranscoder.ts:679-686
-5. **One clock.** Refines SKILL Generic gotchas (old: "decode with ffmpeg to 16 kHz mono float32"): add `-af aresample=async=1:first_pts=0`. Offset of the mp4's audio vs the ASR audio: rising edges of 10 ms RMS at 8 kHz, Pearson over +-500 ms (r <= 0.3: not judged); ours: median of 3 x 20 s windows. abs(offset) > 1 canvas frame: shift all words.
-   Why: audio muxed 0.25 s late decoded 0.23 s early without it (~14 frames at 60 fps); +40 ms read as 40.
-   HF: packages/cli/src/measure/sync.ts:18-25, packages/cli/src/measure/diff.ts:1059-1100
-6. **Language and names.** Pass `language=` (yt-dlp `language`, else `detect_language` on 30 s of speech); `.en` models only for `en`; speech over music/crowd starts at `medium`. Refines SKILL Tool discovery (old: "`medium` for better accuracy on bigger GPUs"). Names from yt-dlp metadata go to the LLM cleanup, not to `hotwords`/`initial_prompt`.
-   Why: `.en` translates; on noise, `detect_language` said `nn` (p 0.45) and seeding put names into silence.
-   HF: skills/media-use/audio/references/transcribe.md:14-22, .agents/skills/changelog-video/SKILL.md:118-120
+5. **ASR on the video's clock.** Refines SKILL Generic gotchas (old: "decode with ffmpeg to 16 kHz mono float32"): always decode ASR audio with `-vn -af aresample=async=1:first_pts=0 -ac 1 -ar 16000 -f f32le -`.
+   - Offset (video's vs ASR audio): 20 s at start, middle, end (same filter, `-ar 8000`); rises of 10 ms RMS; Pearson over ±500 ms (≥ 50 values), r <= 0.3 not judged; median (ours; HF: first 20 s).
+   - abs(offset) > 1 canvas frame: add it to every word time (+ = video's audio late).
+   Why: audio muxed 0.25 s late decoded 0.23 s early without the filter (~14 frames at 60 fps; PyAV too); +40 ms read 40.
+   HF: packages/cli/src/measure/diff.ts:1059-1100
+6. **Language and names.** Pass `language=` (yt-dlp `language`, else `detect_language` on 30 s of speech); `.en` models only for `en`; speech over music/crowd starts at `medium`. Refines SKILL Tool discovery (old: "`medium` for better accuracy on bigger GPUs"). Metadata names go to the caption cleanup (→ ref 04 §1 **Token timing contract**), never `hotwords`/`initial_prompt`.
+   Why: `.en` models translate (HF); on noise `detect_language` said `nn` (p 0.45-0.53); seeded names landed in noise.
+   HF: skills/media-use/audio/references/transcribe.md:14-22,37, .agents/skills/changelog-video/SKILL.md:118-120
 7. **Normalise words.** Keep `raw_words.json`; `transcript.json` =
-   - drop empty, `[_`/`[BLANK`, only ♪/�, huh/uh/um/ah/oh < 0.1 s;
+   - drop non-words: empty, `[_`/`[BLANK`, only ♪/�; fillers stay (→ ref 03 §2 **Fillers: safe list**);
    - join punctuation-only, `'t 'm 's 've 're 'll 'd` and no-leading-space tokens to the previous word; merge lone capital (not I/A/O) + lowercase word, lowercase end + `in'`;
-   - spread runs with start >= end evenly from previous end to next start (0.3 s/word at the end); round to ms;
+   - spread start >= end runs evenly from previous end to next start (0.3 s/word at the end); round to ms;
    - ours: >= 1 canvas frame between starts (shift <= 2 frames);
-   - clamp start >= 0, end = min(dur, max(start, end)); flag spans < 0.05 s; ids `w0..wN`.
-   - Refines ref 01 §3 (old: "fix whisper errors"): fixes return as `{id: text}` + merge/split id lists (`word_fixes.json`, cached); never re-match by string.
-   Why: tiny gave 184 words (178 zero-length) in 0.56 s that pop together; a repeated word matched by text gets the wrong time.
-   HF: packages/cli/src/whisper/normalize.ts:70-149, skills/hyperframes/references/captions.md:9
-8. **Failure gate + hallucinations.** Refines SKILL step 2 (no transcript QC). Per clip window: junk > 20% of entries or LLM-flagged nonsense -> next model (small -> medium -> large-v3), then re-pick. `silencedetect=noise=-35dB:d=0.6`: drop words starting in the final silence (`silence_end` absent or >= duration - 0.05; 7.1 prints it at EOF). Ours: in mid-file silences drop stock phrases (you, thank you, thanks for watching, subscribe, subtitles by) and lexicon names starting >= 0.3 s before `silence_end`.
-   Why: the loop, "Thanks for watching." and seeded names sat in silences; junk was 0%.
-   HF: skills/hyperframes/references/captions.md:8-10, skills/media-use/audio/references/captions/transcript-handling.md:31-57
-9. **Dropped-speech repair.** Cut ~60 s windows at the quietest 100 ms within +-5 s. In a window with words, a gap >= 1.0 s (edges count) with mean(x^2) > 0.3 x the window's is skipped speech: re-decode [gap - 0.5, end + 0.5] after 0.5 s of zeros (`vad_filter=False, condition_on_previous_text=False`), t = max(0, t - 0.5) + lo; add words starting in the gap minus neighbours re-heard within 0.3 s of an edge (letters-only); keep only if words were added, else retry the window padded. Leftovers -> `suspect_gaps`: never cut as dead air.
-   Why: skipped words = missing captions + cuts through speech.
+   - clamp start >= 0, end = min(dur, max(start, end)); flag spans < 0.05 s; ids `w0..wN`; fixes key on ids; assert starts non-decreasing.
+   Why: zero-length runs pop together (seeded `tiny`: 184-186 words, 178-183 zero-length); text matching gives a repeated word the wrong time.
+   HF: packages/cli/src/whisper/normalize.ts:70-149,162-164,529-543, skills/media-use/audio/references/captions/transcript-handling.md:31, skills/hyperframes/references/captions.md:9
+8. **Failure gate + hallucinations.** New SKILL step 2 gate:
+   - per 60 s window, junk > 20% of entries: next model (small -> medium -> large-v3); LLM-flagged nonsense while picking: same, then re-pick;
+   - `silencedetect=noise=-35dB:d=0.6`: drop words starting in the final silence (`silence_end` absent or >= duration - 0.05; 7.1 prints it at EOF);
+   - ours: in other silences drop stock phrases (you, thank you, thanks for watching, subscribe, subtitles by) and metadata names starting in [start, end - 0.3 s].
+   Why: Whisper invents "Thank you." over silence (HF); the seeded loop sat in the final silence (0% junk).
+   HF: skills/hyperframes/references/captions.md:8-10
+9. **Dropped-speech repair.**
+   - Cut ~60 s windows at the quietest 100 ms within ±5 s.
+   - Window with words: a gap >= 1.0 s (edges count) with mean(x^2) > 0.3 x the window's is skipped speech.
+   - Re-decode [g0 - 0.5, g1 + 0.5] after 0.5 s of zeros (`vad_filter=False, condition_on_previous_text=False`); t -> max(0, t - 0.5) + lo.
+   - Add words starting in the gap minus neighbours re-heard within 0.3 s of an edge (letters-only); **Normalise words** and the **Failure gate** apply. None added: re-decode the padded window; keep it if it has more words.
+   - Leftovers -> `suspect_gaps`: no captions, never dead air (→ ref 03 §2 **Dead air**).
+   Why: skipped speech = missing captions + cuts through it.
    HF: packages/cli/src/whisper/parakeet.ts:153-274, packages/cli/src/whisper/sherpaWorker.ts:30-81
-10. **Script hygiene.** Refines SKILL Generic gotchas (old: "Set PYTHONIOENCODING=utf8"): `for s in (sys.stdout, sys.stderr): s.reconfigure(encoding="utf-8", errors=s.errors)`; `encoding="utf-8"` on text IO; subprocess `errors="replace"`. JSON on stdout, logs on stderr, exit 0/1/2 (ok/failed/usage); background jobs end logs with `DONE ok|fail`; wait on that line.
-   Why: on Windows, printing a non-cp1252 glyph to a pipe exited 1.
-   HF: skills/media-use/audio/scripts/extract-audio-data.py:25-31, packages/cli/AGENTS.md:12-26
+10. **Script hygiene.** Refines SKILL Generic gotchas (old: "Set `PYTHONIOENCODING=utf8`"):
+    - `for s in (sys.stdout, sys.stderr): s.reconfigure(encoding="utf-8", errors=s.errors)`; `encoding="utf-8"` on text IO; subprocess `errors="replace"`;
+    - JSON on stdout, logs on stderr, exit 0/1/2 (ok/failed/usage); background job logs end `DONE ok|fail`; wait on it, never `pgrep -f`.
+    Why: on Windows a non-cp1252 glyph printed to a pipe exited 1; `open()` defaulted to cp1252.
+    HF: skills/media-use/audio/scripts/extract-audio-data.py:25-31,60-65, packages/cli/AGENTS.md:12-26, skills/hyperframes-cli/SKILL.md:66
 
 ### Optional
-1. **Parakeet engine.** With `sherpa_onnx` + the int8 `parakeet-tdt-0.6b-v3` export, for its 25 languages: `nemo_transducer`, greedy search, 16 kHz, 80-dim features, 4 threads; then rules 7-9. HF's WER/speed claims are unverified: A/B on 2-3 sources before replacing faster-whisper.
-   HF: packages/cli/src/whisper/sherpa.ts:338-354, packages/cli/src/whisper/parakeet.ts:4-8
+1. **Parakeet engine.** With `sherpa_onnx` + the int8 `parakeet-tdt-0.6b-v3` export (25 languages): `nemo_transducer`, greedy search, 16 kHz, 80-dim features, 4 threads; then **Normalise words** onward. WER/speed claims unverified: A/B on 2-3 sources first.
+   HF: packages/cli/src/whisper/sherpa.ts:338-354, packages/cli/src/whisper/parakeet.ts:4-8,33-35
 
 #### Not adopted
-- HF `probe --normalize`: one whole-source CFR copy at the standard rate nearest the average (24000/1001, 24, 25, 30000/1001, 30, 50, 60000/1001, 60) with AAC 192k (packages/cli/src/commands/measure/probe.ts:29-66): The SKILL Defaults table fixes the canvas at 60 fps (30 under 50 fps), so each clip intermediate is normalised straight to the canvas rate, per window. A whole-source CRF-12 transcode of a 1-2 h source would also break the <= 40 min benchmark (SKILL Benchmark line, ref 02 rule 12). Intermediate audio stays as the cut-list section specifies.
-- Keep 60000/1001 for 59.94 sources (proposal in fps-rationals-vfr-cfr-mezzanine): Defaults table: canvas is 60 fps. `fps=60` duplicates one frame per 1001 (about 3 in a 60 s clip) without A/V drift; only relabelling is banned (rule 3).
-- HF engine VFR threshold of 10% (packages/engine/src/utils/ffprobe.ts:974-975): We keep the measure tools' stricter 1% (packages/cli/src/measure/media.ts:133). It catches stream VODs with dropped frames, and normalising a CFR file is a no-op anyway.
-- Seeding names into ASR via `hotwords`/`initial_prompt` (proposals in asr-language-model-lexicon, asr-language-and-vocab, persistent-name-lexicon): Tested with faster-whisper 1.2.1 on noise and silence: tiny and small wrote the seeded names into non-speech only when seeded, and a seeded prompt at temperature 0 produced a 184-word loop. HF itself keeps whisper for timestamps only and fixes the display spelling afterwards (.agents/skills/changelog-video/SKILL.md:118-120). Names go to the LLM cleanup, keyed by word id (rule 6).
-- External transcription API or user-supplied text as the failure fallback (skills/media-use/audio/references/captions/transcript-handling.md:41-43, 62-80): Precedence rule 5: paid external services are outside requirements.txt. The local ladder small -> medium -> large-v3, then re-pick (ref 02 picking), covers it. The request can still ask for an API.
-- HF default whisper models `small.en` / `medium.en` (skills/media-use/audio/references/transcribe.md:3, 18; skills/hyperframes/references/captions.md:6): SKILL keeps the multilingual `small`/`medium`. A `.en` model is used only when the language is known to be English (rule 6), because `.en` models translate other languages.
-- Parakeet-TDT as the default local engine (skills/media-use/references/operations.md:107-112, packages/cli/src/whisper/parakeet.ts:4-8): Precedence rule 5: requirements.txt has faster-whisper only, and sherpa-onnx is optional. HF's WER and speed claims were not verified here, so it is Optional 1, behind an A/B.
-- probe.ts tone-map order: primaries converted in linear light before hable (packages/cli/src/commands/measure/probe.ts:57): Use one chain: the shared helper packages/core/src/hdrToneMap.ts:29, which the engine extractor, studio proxy, media metadata and snapshot all use, plus the explicit matrix step from proxyTranscoder.ts:683. Tested here, it gave tagged BT.709 output closest to the clipped tone-mapped RGB (mean abs diff 1.94, vs 2.82 without the explicit matrix step).
+- HF `probe --normalize`: one whole-source CFR copy at the standard rate nearest the average (24000/1001, 24, 25, 30000/1001, 30, 50, 60000/1001, 60), AAC 192k (packages/cli/src/commands/measure/probe.ts:29-66): Defaults fix the canvas at 60 fps (30 under 50 fps), so each clip read is normalised straight to the canvas rate. A CRF-12 transcode of a 1-2 h source would break ref 02 rule 12's <= 40 min benchmark.
+- Keeping 60000/1001 for 59.94 sources (reader proposal): Defaults: the canvas is 60 fps. `fps=60` duplicates 4 frames per 60 s (tested: 3597 in, 3601 out) with no A/V drift. Only relabelling the rate is banned.
+- HF engine VFR threshold: 10% of max(r, avg) (packages/engine/src/utils/ffprobe.ts:974-975): We keep the measure tools' 1% (packages/cli/src/measure/media.ts:133). norm_vf resamples every source anyway, so `vfr` only adds a warning, and 1% also flags stream VODs with dropped frames.
+- Seeding names into ASR via `hotwords`/`initial_prompt`: Tested offline with faster-whisper 1.2.1 on noise and silence: seeded names were written into non-speech, and a name prompt at temperature 0 made `tiny` loop 184-186 words. HF keeps whisper for timestamps only and fixes display spelling afterwards (.agents/skills/changelog-video/SKILL.md:118-120).
+- External transcription API or user-supplied text as the failure fallback (skills/media-use/audio/references/captions/transcript-handling.md:41-43, 62-91): Dependencies stay within requirements.txt + ffmpeg. The local ladder small -> medium -> large-v3, then re-pick, covers it. A request can still ask for an API.
+- HF default whisper models `small.en`/`medium.en` (skills/media-use/audio/references/transcribe.md:3,18; skills/hyperframes/references/captions.md:6): The SKILL keeps multilingual `small`/`medium`. A `.en` model is used only when the language is English, because `.en` models translate (HF).
+- Parakeet-TDT as the default local engine (skills/media-use/references/operations.md:107-112; packages/cli/src/whisper/parakeet.ts:4-8): It needs sherpa-onnx, which is outside requirements.txt, and HF's WER/speed claims are unverified here. It stays Optional, behind an A/B.
+- probe.ts tone-map order: primaries converted in linear light before hable (packages/cli/src/commands/measure/probe.ts:57): We keep one chain: HF's shared helper (packages/core/src/hdrToneMap.ts:29, used at videoFrameExtractor.ts:1194, proxyTranscoder.ts:682 and snapshot.ts:608) plus the named-matrix step (proxyTranscoder.ts:683). Without that step, tone-mapped pure red read Y 73, not 63.
+- HF caption cleaner's short-filler drop: huh/uh/um/ah/oh shorter than 0.1 s (skills/media-use/audio/references/captions/transcript-handling.md:55): Fillers stay in transcript.json with ids. Ref 03 §2 **Fillers: safe list** cuts hesitations, ref 04 §1 **Token timing contract** drops them from captions, and 'OH!'/'AH!' can be reactions.
+- Rejecting decimal frame rates such as 29.97 (packages/core/src/fps.ts:63-71): Canvas rates are integers (60/30) and `fps_r` is stored as `num/den`. 29.97 vs 30000/1001 differs by 1e-6, which is 0.06 ms/min.
 
-<!-- G2 = ref 03 §2 | verified -->
-> **ref 03 §2 — verified**
+<!-- G2 = ref 03 §2 | verified (major_rewrite) -->
+> **ref 03 §2: verified**
 
 ## Cut list and splicing: frame-exact, click-free, one clock
 Scope: word ids -> `cutlist.json` -> video-only `cut.mov` + one dialogue stem, one clock for all later timing.
@@ -149,8 +174,8 @@ Scope: word ids -> `cutlist.json` -> video-only `cut.mov` + one dialogue stem, o
 - Two-tier pads (0.15 s for gaps ≥ 0.6 s, 0.08 s for 0.3-0.6 s) and a 0.20 s minimum removal (reader proposals): The tiers are non-monotonic: a 0.59 s gap ends at 0.16 s, a 0.61 s gap at 0.30 s. A 0.20 s minimum removal would leave gaps uncut against ref 01 §8: 0.30-0.40 s gaps with 0.10 s pads, 0.30-0.50 s with 0.15 s pads.
 - Single-pass trim=start_frame/atrim + concat filter graph (idea from packages/cli/src/commands/measure/extract.ts:100-106): Per-segment input seeks with floored 6-decimal times tested exact at 30/29.97/60 fps and allow a per-segment frame check. One long graph needs a filter script on Windows. It can be added later as an alternative.
 
-<!-- G3 = ref 03 §3 | verified -->
-> **ref 03 §3 — verified**
+<!-- G3 = ref 03 §3 | verified (fixed) -->
+> **ref 03 §3: verified**
 
 ## Audio: mix graph, ducking, loudness, SFX and audio gates
 Scope: dialogue stem (ref 03 §2) to the checked AAC ref 03 §4 muxes. "Here" = ffmpeg 7.1, lavfi test media.
@@ -246,8 +271,8 @@ Scope: dialogue stem (ref 03 §2) to the checked AAC ref 03 §4 muxes. "Here" = 
 - A 100 ms-window voice-over-bed gate: >= 10 dB in >= 95% of speech windows (a reader proposal built on audioCarve.ts windowing): It fails a mix built exactly to ref 01 §6: syllable troughs gave p05 2.4-6.9 dB, and only 45-77% of windows reached 10 dB, while per-span margins were 16.1-16.4 dB.
 - Pitch-preserving speed changes: atempo chains and 0.25 s rate slices (packages/engine/src/services/audioMixer.ts:111-162), bullet and slow-mo presets (packages/core/src/speedRamp.ts:166-172, :225-230): Ref 01 §5 'Never use: ... slow motion, speed ramps'. Over-length clips follow ref 02 rule 5.
 
-<!-- G4 = ref 03 §4 | verified -->
-> **ref 03 §4 — verified**
+<!-- G4 = ref 03 §4 | verified (major_rewrite) -->
+> **ref 03 §4: verified**
 
 ## Encode and mux: exact lengths, BT.709 tags, delivery settings
 Scope: intermediates, final encode, audio length, mux and its gate, Windows ffmpeg; tested on ffmpeg 7.1.
@@ -318,76 +343,104 @@ Scope: intermediates, final encode, audio length, mux and its gate, Windows ffmp
 - -avoid_negative_ts make_zero on video-only encodes (packages/engine/src/services/chunkEncoder.ts:556): Unnecessary with -bf 0 (DTS = PTS from 0, tested). The mux gate rejects any empty edit.
 - Pad/trim after the AAC encode by decoding and re-encoding it (packages/producer/src/services/render/audioPadTrim.ts:16-19,171-185): We fit the float mix to N frames before the single AAC encode, so there is no second AAC generation. Only ref 03 §3's true-peak correction re-encodes, and it starts from the PCM.
 
-<!-- G5 = ref 04 §1 | pending verification -->
-> **ref 04 §1 — pending verification**
+<!-- G5 = ref 04 §1 | verified (major_rewrite) -->
+> **ref 04 §1: verified**
 
 ## Captions: timing contract, layout and legibility gates
-Scope: frame-exact, machine-checked ref 01 §3 captions in both editing paths.
+Scope: frame-exact, machine-checked ref 01 §3 captions in both editors.
 
 ### Adopted (default)
-1. **Token timing contract.** Step-5 cleanup returns JSON over the clip's whisper words (ids `w0..`, cut timeline): `{"tokens":[{"d":"GONNA","src":["w813","w814"],"sp":"going to"}],"drop":["w812"]}`. Gates: src ids strictly increasing, each used once; src ∪ drop = all clip words (drop = fillers, stutters, self-corrections); norm(sp or d) matches norm(src text) (lowercase `[a-z0-9]`; equal, prefix, or Levenshtein ≤ max(1, ⌊min len/3⌋)); start = src[0].start, end = src[-1].end; 0 MISMATCH before render. Refines ref 01 §3 Text cleanup (old: no timing rule).
-   Why: rewrites ($100K, F**K, ASR fixes) detach words from their times.
-   HF: .agents/skills/changelog-video/scripts/align-captions.mjs:11-15,54-58
-2. **Frame grid.** Hold caption times as output frames: k(t) = ⌊(t+0.0005)·fps + 1e-6⌋; appear_f = k(word.start) − 1; end_f = min(k(last.end+0.6), next start_f); the last chunk runs to the final frame. ASS Start = first frame on, End = first frame off, floored centiseconds:
-   `def ass_time(k, num=60, den=1): cs = 100*k*den//num; return f"{cs//360000}:{cs//6000%60:02d}:{cs//100%60:02d}.{cs%100:02d}"`
-   Tested exact at 23.976-60 fps; nearest-cs rounding is a frame late on 8/24 events. The ass filter keys on frame PTS: the burn input's first video `pts_time` (showinfo) must be 0.
-   Why: rounding delays a third of reveals a frame.
+1. **Token timing contract.** Refines ref 01 §3 Text cleanup (old: "fix whisper errors", no timing).
+   - Step-5 cleanup, over clip word ids: `{"tokens":[{"d":"GONNA","src":["w813","w814"],"sp":"going to"}],"drop":["w812"]}`.
+   - 0 errors before render: ids strictly increasing, each used once; src ∪ drop = all clip words (drop = fillers, stutters, self-corrections); asterisk tokens have no src.
+   - norm(sp or d) matches norm(joined src texts): lowercase `[a-z0-9]`; equal, prefix, or Levenshtein ≤ max(1, ⌊min len/3⌋), else MISMATCH. start = src[0].start, end = src[-1].end.
+   Why: rewrites ($100K, F**K) lose their times; without `sp` each failed.
+   HF: .agents/skills/changelog-video/scripts/align-captions.mjs:11-15,39-58,123-127; .agents/skills/captions-overlay/SKILL.md:26
+2. **ASS frame times.** k(t) = ⌊(t + 0.0005)·fps + 1e-6⌋ (→ ref 03 §2 **Frame grid**).
+   - appear_f (a) = max(0, k(word.start) − 1); end_f = min(k(last.end + 0.6), next start_f); the last chunk ends at N.
+   - Start = first frame on, End = first frame off, in floored centiseconds `cs = 100*k*den//num` (fps = num/den; H:MM:SS.cc).
+   - ass keys on PTS: the burn input's first `pts_time` (showinfo) is 0; fix the cut, not `setpts` there.
+   Why: floored cs exact at 23.976-60 fps; nearest: 8/24 starts a frame late at 30/60.
    HF: skills/reverse-any-video/SKILL.md:19; packages/cli/src/measure/media.ts:339-341
-3. **Event mechanics.** Per word, one event per Layer (0 shadow, 1 glow, 2 fill), each with `\an7\pos(x,y)` (else libass restacks overlapping events; tested); End = chunk end_f (hard kill); the entrance is the word's only opacity owner, starting at 1/3: `\alpha&HAA&\fscx93\fscy93\blur4\t(0,T,\alpha&H00&\fscx100\fscy100\blur0)`, T = 2000/fps ms → 29/68/98% on frames a..a+2. Refines SKILL Editing paths B (old: "`\fad`/`\t` for the 3-frame fade"): `\fad` is 0-12% on its Start frame. EffectCraft: out-point = end_f; full-canvas caption precomps.
-   Why: stacked, stuck, popping or late words.
-   HF: skills/hyperframes/references/captions.md:21,34-37; packages/lint/src/rules/captions.ts:26-36
-4. **Size and stroke.** libass `\fs` sizes usWinAscent+usWinDescent: `\fs = em × (winAscent+winDescent)/unitsPerEm` (Montserrat Black: 68 px em = `\fs93.8`; `\fs68` gave a 35 px cap vs Pillow 48). Refines ref 01 §3 Size for ASS (old: "At 1440: about 68 px"). `\bord` = 0.04 × em (drawn outside, under the fill; tested); EffectCraft centred stroke: Fill Over Stroke at 0.08 × em, verify on one frame. Gate: cap height 3.3% H ±1 px.
-   Why: raw `\fs` gives 2.4% H captions.
+3. **Event mechanics.** Refines SKILL path B and ref 01 Editing tool (old: "`\fad`/`\t` for the 3-frame fade", "per-word `\fad`/`\blur`/`\fscx` tags") and ref 01 §3 Reveal (old: "opacity 0 to 100%, scale 90 to 100%, blur 6 to 0 px").
+   - Per word one event per Layer (0 shadow, 1 glow, 2 fill), each `\an5\pos` at the word centre (cy = baseline − 0.304·`\fs`): unpositioned overlaps restack, `\an7` scales from the corner (12-14 px slide).
+   - End = chunk end_f (hard kill; EffectCraft: out-point, full-canvas precomps).
+   - Sole opacity owner: the entrance from 1/3, `\alpha&HAA&\fscx93\fscy93\blur4\t(0,T,\alpha&H00&\fscx100\fscy100\blur0)`, T = round(2000/fps) ms: alpha 33/67/100% on a..a+2 (`\fad`: 0-12% on a).
+   Why: stacked, sliding, stuck, late words.
+   HF: skills/hyperframes/references/captions.md:21,34,36-37; packages/lint/src/rules/captions.ts:26-36
+4. **Size and stroke.** Refines ref 01 §3 Size for ASS (old: "At 1440: about 68 px").
+   - `\fs` = em × (usWinAscent + usWinDescent)/unitsPerEm: Montserrat Black ×1.379 (68 px em = `\fs93.8`, 90 px = `\fs124.1`).
+   - `\bord` = 0.04 × em (outside, under the fill); EffectCraft (centred stroke): Fill Over Stroke 0.08 × em (check one frame).
+   - Gate: cap height 3.3% H ±1 px (47 px at 1440, 63 at 1920).
+   Why: `\fs68` gave a 35 px cap (2.4% H) vs Pillow's 48.
    HF: registry/components/caption-emoji-pop/caption-emoji-pop.html:106-107
-5. **Measured-fit chunks.** Width = Pillow `getlength` at the em × 1.02 (ASS; measured +0.2-1.1%) or × 1.14 (EffectCraft, until measured); lines ≤ 0.80 W, ≤ 2, split at argmin |w1 − w2|. A word that breaks the fit closes the chunk (never shrink); punctuation/0.25 s flush also after an overflow (HF skips it). Lone word > 0.80 W: scale ≥ 0.85×. Refines ref 01 §3 Size (old: "Max line width 80% W. Max 2 lines").
-   Why: estimates overflow or wrap unevenly.
-   HF: registry/components/caption-neon-accent/caption-neon-accent.html:311-373
-6. **Keyword guard.** Reject single-word keywords: the a an and or but is are was were to of in on at for with by from as it its this that these those be been have has had do does did will would could should may might must can if then so just up out about. NO/NOT/YES stay allowed; digit/$/% tokens default to cyan; no randomness.
-   Why: coloured "THE" reads as noise.
-   HF: registry/components/caption-neon-accent/caption-neon-accent.html:142-199
-7. **Face avoidance per window.** Block box = caption-only render on #808080, max|px−128| > 24 (incl. stroke, shadow, glow; the ass filter writes no alpha). Go to 72% H whenever it meets the union of face boxes (eyes–chin +5%) over [start_f, end_f); back to 50% within a shot only after ≥ 2 clear chunks; reset at cuts. QC: 0 overlap frames. Refines ref 01 §3 Position (old: "intersects the tracked face box (eyes to chin), move the block to y = 72% H").
+5. **Measured-fit chunks.** Refines ref 01 §3 Size (old: "cap height 3.3% H", "Max line width 80% W. Max 2 lines").
+   - Line width = Pillow `getlength(line)` at the em × 1.02 (ASS) or × 1.14 (EffectCraft, unmeasured) + 2·`\bord`; lines ≤ 0.80 W, ≤ 2, split at argmin |w1 − w2|.
+   - A word that breaks the fit starts the next chunk (never shrink), still with the punctuation/0.25 s flush. A lone word > 0.80 W may scale to ≥ 0.85×.
+   Why: libass ink = 0.99-1.01 × (getlength + 2·`\bord`).
+   HF: registry/components/caption-neon-accent/caption-neon-accent.html:139,295-299,311-373
+6. **Keyword guard.** One-word keywords stay white if in: the a an and or but is are was were to of in on at for with by from as it its this that these those be been have has had do does did will would could should may might must can if then so just up out about. Digit/$/% tokens default to cyan. No randomness.
+   Why: coloured "THE" is noise; NO/NOT/YES stay free for red.
+   HF: registry/components/caption-neon-accent/caption-neon-accent.html:142-199,284-285
+7. **Face avoidance per window.** Refines ref 01 §3 Position (old: "intersects the tracked face box (eyes to chin), move the block to y = 72% H").
+   - Block box = caption-only render on #808080, max|px − 128| > 24 (+ shadow, glow; ass writes no alpha).
+   - Low (72% H) when it meets the union of face boxes (eyes to chin, +5%) over [start_f, end_f); after a low chunk, return to 50% at the first of 2 clear chunks; cuts reset.
+   - QC: 0 frames over a face.
    Why: heads move mid-chunk; per-chunk flips flicker.
    HF: skills/hyperframes/references/captions.md:45; docs/guides/captions-and-recuts.mdx:125-127
-8. **9:16 UI band.** On 1080×1920 every caption, label and sticker stays in y 168-1330 px; face-avoid = block bottom ≤ 1330, not 72% (1382 px); clear the right action rail (width unstated: check the app). Conflicts with ref 01 §3 Position on 9:16 only.
-   Why: app UI covers text below 1330 px.
+8. **9:16 UI band.** Refines ref 01 §3 Position on 9:16 (old: "move the block to y = 72% H"): on 1080×1920 caption, label and sticker boxes stay in y 168-1330 px; low = block bottom at 1330 (72% H is 1382); clear the right action rail (no width).
+   Why: app UI covers y < 168 and > 1330 px.
    HF: skills/hyperframes/references/types/vertical.md:7
-9. **Burned-in text scan.** Pre-reframe, read `ffmpeg -ss S -to E -i src.mp4 -vf "fps=1,scale=360:-1,tile=6x10" -frames:v 1 sheet.png`; crop out subtitles, lower thirds, chat, tickers, else keep captions clear. Refines ref 01 §1 (old: overlays only).
+9. **Burned-in text scan.** Refines ref 01 §1 (old: stream overlays kept "only if cropping them out would cut the subject").
+   - Pre-reframe: `ffmpeg -ss S -to E -i src.mp4 -vf "fps=1,scale=360:-1,tile=6xK" -frames:v 1 sheet.png`, K = ⌈(E − S)/6⌉ (6x10 drops > 60 s).
+   - Crop out subtitles, lower thirds, chat, tickers; else keep clear.
    Why: source subtitles can start mid-clip.
    HF: skills/hyperframes/references/captions.md:39
-10. **Presence, stale and sync gate (hard fail).** Reference = the same editor's caption-only render on #808080; at half size, word mask = fill (|px−128| > 64) eroded 1 px, match = share within RGB distance 45. Chunk midpoints + ≥ 6 speech frames: every word ≥ 0.8; end_f..end_f+2: ≤ 0.2 where the next chunk is absent; sync: first frame ≥ 0.5 = appear_f + 2 ±1 (measures ref 01's ±2-frame QC); each libass `fontselect: (Montserrat Black, …) -> X` names Montserrat (a typo gave `-> ArialMT`). Never |edited − raw|: a +10% grade alone moves it ~10 levels.
-   Why: empty events, font fallback, stuck or offset captions ship silently.
+10. **Presence, stale and sync gate (hard fail).** Refines ref 01 QC (old: "Captions sit within ±2 frames of the whisper word starts").
+   - R = same editor's fill-only render (no entrance) on #808080 at end_f − 1; P = caption-free graded render (→ ref 04 §3 **Gate footage only, paired by index**).
+   - Half size: word mask = |R − 128| > 64, eroded 1 px, minus pixels where P is within RGB 45 of R (< 25% left: skip); match = share within RGB 45 of R; skip accent spans.
+   - Presence: every word ≥ 0.8 at chunk midpoints + ≥ 6 speech frames. Stale: ≤ 0.2 on end_f..end_f+2 (minus the next chunk's mask).
+   - Sync: the match ≥ 0.5 run reaching min(full_f + 8, end_f − 1) starts at full_f = appear_f + 2, ±1.
+   - Font: each `fontselect: (<family>, …) -> X` (info log) names that family (a typo gave `ArialMT`).
+   Why: deleted 0.00, held 1.00, +4 shift lag 3-4; without P, a bright plate read 0.35.
    HF: .agents/skills/changelog-video/SKILL.md:162-167; packages/cli/src/measure/drawn.ts:9-14
-11. **Legibility gate.** At each word's full frame, render its shadow alone over the graded plate; sample the box inset 1 px on ≤ 12×6 points, per-channel median; pass max(WCAG fill, black stroke) ≥ 3.0. Fail → other ref 01 position, else that chunk's shadow 75% (Refines ref 01 §3, old: shadow "55% opacity"); never a box. Tested: red over grey 130-170: 2.0-2.7 at 55%, 3.3-3.9 at 75%.
-   Why: red/magenta keywords vanish on mid-tones.
-   HF: packages/cli/src/commands/contrast-sample.ts:3-8,56-62; packages/cli/src/commands/contrast-audit.browser.js:614-636
-12. **Non-speech text floors.** Asterisk lines, context line, labels: legible ≥ 0.4 s (≤ 2 words) or ≥ 0.75·(0.5 + 0.3·n) s; font ≥ 2.6% of the short side; context line ≤ 3 words to fit ref 01 §2's ≤ 1.5 s (old: no hold floor).
+11. **Legibility gate.** Refines ref 01 §3 (old: shadow "at 55% opacity").
+   - At each word's full frame, render the shadow layer alone on the graded plate (glow, stroke = glyph paint).
+   - Sample the word box inset 1 px on a ⌊w/12⌋ × ⌊h/6⌋ px grid; bg = per-channel median; pass max(WCAG fill, black stroke) ≥ 3.0.
+   - Fail → other ref 01 position if face-clear, else that chunk's shadow 75%; never a box.
+   Why: red over grey 130-170 read 2.0-2.9 at 55%, 3.3-4.2 at 75%.
+   HF: packages/cli/src/commands/contrast-sample.ts:3-8,38-62; packages/cli/src/commands/contrast-audit.browser.js:600-636
+12. **Non-speech text floors.** Refines ref 01 §2 (old: "add one asterisk line ... for ≤ 1.5 s").
+   - Asterisk lines, context line, labels: fully typed ≥ 0.4 s (≤ 2 words) or ≥ 0.75·(0.5 + 0.3·n) s; font ≥ 2.6% of the short side (28 px).
+   - Context line ≤ 3 words, typed in ≤ 0.45 s (+1.05 s = 1.5 s).
    Why: typed lines vanish unread.
-   HF: packages/cli/src/utils/craftAudit.ts:5-21
+   HF: packages/cli/src/utils/craftAudit.ts:5-21,447-450
 
 ### Optional
-- **Speech-rate chunk size.** For calm talkers: max words 3 at ≥ 3.3 words/voiced s, 4 at 2.3-3.3, 5 below (our bands; ref 01 cap 6).
+- **Speech-rate chunk cap.** Refines ref 01 §3 Chunking (old: "2-4 words per chunk (max 6)"): 3 words at ≥ 3.3 words/voiced s, 4 at 2.3-3.3, 5 below (bands ours).
    Why: 2-word flips on slow speech read choppy.
    HF: skills/hyperframes/references/captions.md:19
 
 #### Not adopted
-- Karaoke active-word highlight as the caption baseline at every energy level (skills/media-use/audio/references/captions/motion.md:15) and grey-to-ink per-word recolour (registry/components/caption-pill-karaoke/caption-pill-karaoke.html:148-151): Ref 01 §3 Reveal wins: 'No bounce and no karaoke recolour'; words build additively in their final colour. Also on ref 02's NOT ADOPTED list.
-- Mandatory audio-reactive caption scale/glow when the audio is music (skills/media-use/audio/references/captions/motion.md:21-23): Ref 01 §3 Reveal (landed words stay still after a 3-frame entrance) and ref 01 §5 'Never use: beat shake, per-word zoom punches' win.
-- Cycling highlight styles every 2-4 groups and overshoot/bounce on emotional keywords (skills/media-use/audio/references/captions/motion.md:77; skills/media-use/audio/references/captions/authoring.md:41): Ref 01 §3: one caption look per clip and 'No bounce'. HF's own catalog agrees on one identity per composition (docs/prompting/captions-catalog.mdx:92).
-- Seeded-random accent colour on about 40-45% of non-function words, and accent words drawn at 1.2x size (registry/components/caption-neon-accent/caption-neon-accent.html:286-299,447-448; registry/components/caption-emoji-pop/caption-emoji-pop.html:270-274): Ref 01 §3 Colour: 1-3 semantic keywords per chunk chosen by meaning, all words the same size; emphasis comes from colour plus glow only.
-- A text-sized 30-40% scrim behind captions over footage brighter than 60, and blend mode chosen by backdrop brightness (screen < 60, overlay 60-180, normal > 180) (skills/hyperframes/references/captions.md:38): Ref 01 §3 'no background box' and opaque white/semantic fills with stroke and shadow; legibility fixes stay inside that look (ref 04 item 11).
-- Contrast fix that steps the fill colour toward white or black until it passes (suggestedColor) (skills/hyperframes-cli/references/lint-validate-inspect.md:88; packages/cli/src/commands/contrast-bg.ts:47-50): Ref 01 §3 fixed semantic palette: green/yellow/red/magenta/cyan carry meaning. We move the block to the other ref 01 position or deepen that chunk's shadow instead.
-- Start the first caption 0.1-0.3 s in, because a caption at exactly 0 s 'looks pre-existing' (skills/hyperframes/references/captions.md:20): Ref 01 §2 cold open: speech at frame 0 and the caption visible by t <= 0.1 s. Ref 02 starts the clip 0.05 s before the hook word, so word 1 already appears around frame 2.
-- The final caption clears before the video ends; the film's last line holds at least 2 s (docs/guides/captions-and-recuts.mdx:135; skills/hyperframes/references/motion.md:22; packages/cli/src/utils/craftAudit.ts:17): Ref 01 §5 and the SKILL Defaults 'Ending' row: clean hard cut right after the payoff with the payoff chunk on screen. Ref 02 ends the clip at last word + 0.15 s.
-- Exit tweens (fade or blur-out 0.12-0.25 s, exits 40-50% shorter than entrances) and group end = last word + 0.5 s, 0.05 s before the next group (skills/hyperframes/references/captions.md:24; skills/hyperframes/references/motion.md:12,22; registry/components/caption-highlight/caption-highlight.html:183): Ref 01 §3 'The exit is a hard cut'; a chunk holds until the next chunk starts or 0.6 s after its last word.
-- Portrait captions about 600-700 px from the bottom; burned-in captions at the bottom of the UI band (skills/hyperframes/references/captions.md:35; skills/hyperframes/references/types/vertical.md:7): Ref 01 §3 Position: first-line baseline at 50% H, 72% H only when off the face. Only HF's 1330 px bottom limit is adopted, for 9:16 (ref 04 item 8).
-- Default group sizes of 3-5 (conversational) or 4-6 (calm) words, and pause breaks at 0.10-0.15 s (skills/hyperframes/references/captions.md:19; registry/components/caption-neon-accent/caption-neon-accent.html:133-135): Ref 01 §3 Chunking: 2-4 words (max 6), break at gaps > 0.25 s. HF's tiers survive only as the optional speech-rate variant.
-- Shrink-to-fit font loop (88 -> 62 px in 2 px steps; fitTextFontSize floor 0.45x base) (registry/components/caption-neon-accent/caption-neon-accent.html:235-244,382-385; skills/hyperframes/references/captions.md:32): Ref 01 §3 Size fixes cap height at 3.3% H; re-chunk instead (HF's own types/vertical.md:18 says 'cut words, never shrink'). Only a lone over-wide word may scale, floor 0.85x.
-- Entrance that completes on the spoken word (lead = min(7/30 s, gap to the previous group); 0.05 s colour-fade lead) (registry/components/caption-neon-accent/caption-neon-accent.html:466-471; registry/components/caption-pill-karaoke/caption-pill-karaoke.html:151): Ref 01 §3 Reveal measured that each word appears at its whisper start minus 0-2 frames; finishing a 3-frame entrance on the word would start it 3-4 frames early.
-- Layered same-colour glow (4/10/20/40 px at 1.0/0.9/0.7/0.4) plus y-offset dark drop shadows 0 8px 16px and 0 16px 40px (registry/components/caption-neon-accent/caption-neon-accent.html:396-427): Ref 01 §3 wins on style: one same-colour glow (about 20 px, about 70%) and a soft black shadow at offset 0.
-- Matted 'embed' words set behind the speaker as a caption treatment (.agents/skills/captions-overlay/SKILL.md:20-32; skills/hyperframes/references/captions.md:41-45): Not part of ref 01's measured style (all captions in front, centred); it would also need a matting model outside requirements.txt.
+- Karaoke active-word highlight as the baseline at every energy level (skills/media-use/audio/references/captions/motion.md:15) and grey-to-ink per-word recolour (registry/components/caption-pill-karaoke/caption-pill-karaoke.html:148-151): Ref 01 §3 Reveal: 'No bounce and no karaoke recolour'. It is also on ref 02's NOT ADOPTED list.
+- Mandatory audio-reactive caption scale/glow over music (skills/media-use/audio/references/captions/motion.md:21-23): Ref 01 §3 Reveal (3-frame entrance, 'No bounce') and §5 'Never use: beat shake, per-word zoom punches'.
+- Highlight styles cycled every 2-4 groups (skills/media-use/audio/references/captions/motion.md:9-13,77) and overshoot/bounce on emotional keywords (skills/media-use/audio/references/captions/authoring.md:41): Ref 01 §3 specifies one caption look and 'No bounce'. HF's own catalog asks for one identity per composition (docs/prompting/captions-catalog.mdx:92).
+- Seeded-random accent colour on 40-45% of non-function words, and accent words at 1.2x size (registry/components/caption-neon-accent/caption-neon-accent.html:286-299,447-448; registry/components/caption-emoji-pop/caption-emoji-pop.html:270-274): Ref 01 §3 Colour: 1-3 semantic keywords per chunk, chosen by meaning. Size is fixed by the cap height.
+- Text-sized 30-40% scrim over footage brighter than 60, and blend mode chosen by backdrop brightness (skills/hyperframes/references/captions.md:38): Ref 01 §3 says 'no background box'. Contrast fixes stay inside the look (→ ref 04 §1 **Legibility gate**).
+- Contrast fix that steps the fill colour toward white or black (suggestedColor; skills/hyperframes-cli/references/lint-validate-inspect.md:88; packages/cli/src/commands/contrast-bg.ts:47-50): Ref 01 §3 palette colours carry meaning. We move the block or deepen that chunk's shadow instead (→ ref 04 §1 **Legibility gate**).
+- First caption 0.1-0.3 s in, because one at 0 s 'looks pre-existing' (skills/hyperframes/references/captions.md:20): Ref 01 §2 puts the first caption on screen by t ≤ 0.1 s. Ref 02 starts the clip 0.05 s before the hook word, so word 1 appears at frame 2 (60 fps).
+- Final caption clears before the video ends; the last line holds ≥ 2 s (docs/guides/captions-and-recuts.mdx:135; skills/hyperframes/references/motion.md:22; packages/cli/src/utils/craftAudit.ts:17): SKILL Defaults 'Ending' and ref 01 §5: hard cut right after the payoff, with the payoff chunk still on screen (ref 02: end = last word + 0.15 s).
+- Exit tweens (fade or blur-out 0.12-0.25 s, exits 40-50% shorter than entrances) and group end = last word + 0.5 s, 0.05 s before the next group (skills/hyperframes/references/captions.md:24; skills/hyperframes/references/motion.md:12,22; registry/components/caption-highlight/caption-highlight.html:183): Ref 01 §3: 'The exit is a hard cut'. A chunk holds until the next one starts, or 0.6 s after its last word.
+- Portrait captions about 600-700 px from the bottom; burned-in captions at the bottom of the UI band (skills/hyperframes/references/captions.md:35; skills/hyperframes/references/types/vertical.md:7): Ref 01 §3 Position: 50% H, or 72% H when off the face. Only the 168-1330 px band is adopted (→ ref 04 §1 **9:16 UI band**).
+- Group sizes of 3-5 / 4-6 words and pause breaks at 0.10-0.15 s (skills/hyperframes/references/captions.md:19; registry/components/caption-neon-accent/caption-neon-accent.html:135): Ref 01 §3 Chunking: 2-4 words (max 6), breaks at gaps > 0.25 s. HF's tiers survive only as the Optional speech-rate cap.
+- Shrink-to-fit font loops: neon-accent fitFontSize 88 → 62 px in 2 px steps (floor 0.45x base); runtime fitTextFontSize 78 → 42 px (registry/components/caption-neon-accent/caption-neon-accent.html:235-244,382-385; skills/hyperframes/references/captions.md:32): Ref 01 §3 fixes cap height at 3.3% H. Re-chunk instead, as HF's own types/vertical.md:18 says ('cut words, never shrink'). Only a lone over-wide word scales, floor 0.85x.
+- Entrance that completes on the spoken word: lead = min(7/30 s, gap to the previous group), plus a 0.05 s colour-fade lead (registry/components/caption-neon-accent/caption-neon-accent.html:466-471; registry/components/caption-pill-karaoke/caption-pill-karaoke.html:151): Ref 01 §3 Reveal measured each word appearing at word.start − 0-2 frames. A 7/30 s lead is up to 14 frames at 60 fps.
+- Layered same-colour glow (4/10/20/40 px at 1.0/0.9/0.7/0.4) plus dark drop shadows 0 8px 16px and 0 16px 40px (registry/components/caption-neon-accent/caption-neon-accent.html:396-427): Ref 01 §3 specifies one same-colour glow (about 20 px, about 70%) and a soft black shadow at offset 0.
+- Matted 'embed' words set behind the speaker (.agents/skills/captions-overlay/SKILL.md:20-32; skills/hyperframes/references/captions.md:41-45): Not part of ref 01's measured style (captions sit in front). It also needs a matting model outside requirements.txt.
+- Caption presence and timing from caption-band frame differences (default threshold 5 grey levels, plain |edited − raw|) as a gate on our renders (skills/reverse-any-video/references/match.md:8; packages/cli/src/measure/events.ts:229): Built for third-party references; ref 05 §1 keeps it for reference studies. On our renders, a +10% luma grade alone moved |graded − raw| 7-18 levels in caption-free boxes (test). An affine ring fit separated presence (49-60 vs 1.0-1.2) but not a held chunk under the next chunk's box (45.0 vs 48.9). → ref 04 §1 **Presence, stale and sync gate**.
 
-<!-- G6 = ref 04 §2 | verified -->
-> **ref 04 §2 — verified**
+<!-- G6 = ref 04 §2 | verified (major_rewrite) -->
+> **ref 04 §2: verified**
 
 ## Cut detection, reframe and accents
 Scope: cuts, the crop across them, and frame-exact flashes, whips and pushes.
@@ -475,8 +528,8 @@ Scope: cuts, the crop across them, and frame-exact flashes, whips and pushes.
 - Roll, pitch and yaw terms of the camera-shake overscan solver (registry/components/camera-shake/camera-shake.html:718-727): Ref 01 §5 'Never use: beat shake', and no clip accent rotates the plate, so item 6 keeps only the translation term.
 - Seam-gate 'moving at the boundary' check: exit or entry slower than 15 px/s fails (.agents/skills/motion-doctrine/scripts/seam-gate.mjs:40,423-427): Ref 01 §4 wants a locked camera ('Reframe with cuts, not fast pans'), so both sides of a hard cut are usually static. Only the carrier check is kept (item 5).
 
-<!-- G7 = ref 04 §3 | verified -->
-> **ref 04 §3 — verified**
+<!-- G7 = ref 04 §3 | verified (fixed) -->
+> **ref 04 §3: verified**
 
 ## Grade and colour pipeline, grade gates
 Scope: tagged BT.709 intermediate → graded footage, and the grade gate.
@@ -563,8 +616,8 @@ Scope: tagged BT.709 intermediate → graded footage, and the grade gate.
 - Grain, dither, scanlines, halftone, film/VHS and other stylised looks: Not part of ref 01's look.
 - Five samples per file as the analysis granularity (packages/cli/src/media-use/lib/grade-analyzer.mjs:7): Camera groups need per-shot samples, and the gate needs 1 fps paired frames.
 
-<!-- G8 = ref 05 §1 | verified -->
-> **ref 05 §1 — verified**
+<!-- G8 = ref 05 §1 | verified (major_rewrite) -->
+> **ref 05 §1: verified**
 
 ## QC gates, review sheets and reference-study tooling
 Scope: render gates, review sheets, notes, reference studies (ffmpeg 7.1, lavfi tests).
@@ -652,8 +705,8 @@ Scope: render gates, review sheets, notes, reference studies (ffmpeg 7.1, lavfi 
 - PSNR >= 32 dB for picture-unchanged re-edits (floor from packages/engine/src/utils/psnr.ts:37-44): Superseded by ref 05 §2 Prove the freeze: the video stream hash must stay identical.
 - Decoded-audio end window (-1 frame to +1 frame + 1024 samples) as a separate artifact check (synthesis proposal): Ref 03 §4 Delivery gate owns audio length. Decoded AAC runs up to 1023 samples past the mix (tested: 120000 -> 120832), so that gate reads container durations instead.
 
-<!-- G9 = ref 05 §2 | verified -->
-> **ref 05 §2 — verified**
+<!-- G9 = ref 05 §2 | verified (fixed) -->
+> **ref 05 §2: verified**
 
 ## Skill structure, re-edits, picking hygiene and the lessons loop
 Scope: what ships, safe writes, caching, re-edits, versions, copy fidelity, lessons.
