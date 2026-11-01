@@ -94,15 +94,17 @@ Scope: cuts, the crop across them, and frame-exact flashes, whips and pushes.
 
 ### Adopted (default)
 1. **Classified cut detector.** Refines SKILL step 4 (old: "ffmpeg `scene` > 0.3") and ref 02 rule 13 (old: "histogram difference over 0.35").
-   - Input: the ref 03 §1 **Normalise in every clip intermediate** file (CFR, rate R) or `edited/NN-slug.mp4`: `ffmpeg -nostdin -v error -ss A -i in -t D -an -vf scale=64:36:flags=area,format=gray -f rawvideo -` (A, D as `T(k)` per ref 03 §2 **Frame grid**).
-   - Decoded frame j is frame ceil(A·R − 1e-6) + j of the file.
+   - Input: the ref 03 §1 **Normalise in every clip intermediate** file (CFR, rate R) or `edited/NN-slug.mp4`. The decoded window (lead included) snaps to boundary frames k0 and k1 (ref 03 §2 **Frame grid**): `ffmpeg -nostdin -v error -ss T(k0) -i in -map 0:v:0 -an -vf scale=64:36:flags=area,format=gray -frames:v <k1 − k0> -f rawvideo -pix_fmt gray -`; decoded frame j is frame k0 + j of the file.
+   - A VFR input (average rate > 1% off the stream rate) or a grid R other than the stream rate gets `fps=R` before the scale, with a `retimed` warning: index frames of the CFR intermediate instead.
    - d[j] = mean |F[j] − F[j−1]|, d[0] = 0. typical = max(1, sorted[n//2]) of the d ≥ 0.5 among ±N neighbours (from j = 1); 1 if fewer than 4.
-   - Hard hit: d ≥ 12 and ≥ 4×typical. Soft hit (same-angle punch-in): d ≥ 10, ≥ 8×typical, ≥ 4× the largest neighbour.
+   - Hard hit: d ≥ 12 and ≥ 4×typical, tested first. Soft hit: d ≥ 10, ≥ 8×typical, ≥ 4× the largest neighbour. So a large same-angle punch-in is a hard hit; only a smaller one (10 ≤ d < 12 among quiet neighbours) is soft. Both are cuts.
    - Consecutive hits merge (max change; soft only if all are). > M frames = `fast`; picture back within K frames (MAD < 0.4×change) = `flash`; the rest are cuts.
+   - Blank bridge (ours): a cut followed by the next event within K frames, with every frame shown between them flat (64×36 grey std ≤ 4), is a `flash`; the next event keeps its own class (a cut into a new shot, a `flash` when the old shot returns).
    - N, M, K = 12, 3, 4 × r, r = max(1, round(R/30)) (scaling not in HF).
-   - Reframe: detect on [start − 0.5 s, end + 0.5 s] (a window's first frame has no d); reset and snap at cuts and at every splice, never at `flash`/`fast`.
+   - Reframe: detect on [start − 0.5 s, end + 0.5 s] (a window's first frame has no d; events in the lead are dropped); reset and snap at cuts and at every splice, never at `flash`/`fast`.
    - Rendered edits: → ref 05 §1 **Events match the plan**.
-   Why: `scene>0.3` split a flash into 2 cuts and missed 20% punch-ins (this detector: d ≥ 19.6); a histogram detector logged 172 "cuts" on ref 1 (~27 real). At 60 fps, r = 1 read a 55% tint as a cut; r = 2 read `flash`.
+   - Implemented by `scripts/cuts.py` (`reset_frames` = hard and soft cut frames; frame 0 = the frame at `--start`, t in absolute seconds). It keeps every decoded frame in memory (2.3 KB each): detect on clip windows, not whole long sources.
+   Why: `scene>0.3` split a flash into 2 cuts and missed 20% punch-ins (this detector: d ≥ 19.6); a histogram detector logged 172 "cuts" on ref 1 (~27 real). At 60 fps, r = 1 read a 55% tint as a cut; r = 2 read `flash`. Without `fps=R` a VFR join put the cut at 1.983 s, not 2.000 s. Tested: a 20% punch-in (crop 0.8) read d 21.5 = hard; a 10% one on moving footage d 10.34 = soft; 8-9% d 8.6-9.5 and 6% d 6.8 = no event. A dip through 2 white frames into a different shot read as two hard cuts 2 frames apart (d 127.8, 126.9) because the first shot never returns; the bridge makes it a flash + one cut, so the reframe resets once, on the new shot.
    HF: packages/cli/src/measure/cuts.ts:7-19,37-90; packages/cli/src/commands/measure/cuts.ts:31-36
 2. **Accent timing.** Refines ref 01 §5 tint flash (old: "1-frame attack, 0.25-0.4 s decay", no curve).
    - Accents are output frame indices. Cause frame = the cut, the visible impact, or `k(remap(word.start))` (ref 03 §2 **Frame grid**, **One clock**).
@@ -168,21 +170,26 @@ Scope: the tagged BT.709 clip intermediate → graded footage, and the grade gat
 1. **Grade and gate the footage only.** Refines ref 01 §7 QC gate (old: "sample 1 frame per second from source and output") and ref 01 Editing tool / SKILL path A (old: "grade on an adjustment layer").
    - Grade before captions and overlays (`[v]<grade>[g];[g]ass=...`). EffectCraft: in a canvas-size footage precomp (adjustment layer above the tracked source), under the accent, caption and sticker layers (order → ref 04 §1 **Event mechanics**).
    - Render `qc/NN/grade.mp4` full-length in both editors: same chain, no ASS or overlays (EffectCraft: the footage precomp rendered alone, untested). The caption gates reuse it.
-   - Gate `raw/NN-slug.mp4` vs `qc/NN/grade.mp4`. Fallback `edited/NN-slug.mp4`: mask caption and sticker block boxes (→ ref 04 §1 **Face avoidance per window**) + 8 px; skip accents ±0.5 s and the freeze.
-   - Samples: frames showing t = i + 0.5 s (i < ⌊D⌋), indexed per ref 05 §1 **Frames by index**, decoded with `scale=in_color_matrix=bt709:in_range=tv,format=bgr24`.
-   Why: captions alone gave sharpness x7.2 (luma, sat x1.00) on an ungraded clip.
+   - Gate `raw/NN-slug.mp4` vs `qc/NN/grade.mp4`. Fallback `edited/NN-slug.mp4`: mask caption and sticker block boxes (→ ref 04 §1 **Face avoidance per window**) + 8 px; skip accents ±0.5 s and the freeze. A masked sample counts only where its whole source area is unmasked (→ **One metric definition**).
+   - Samples: frames showing t = i + 0.5 s (i < ⌊D⌋), indexed per ref 05 §1 **Frames by index**, decoded with `scale=in_color_matrix=bt709:in_range=tv,format=rgb24`. Under 8 usable samples the step halves to 0.5 s once, then the gate refuses (exit 2).
+   - Inputs: same canvas size and fps (a grade-only render also the same frames ±1); BT.709 tv or untagged (read as BT.709 tv with a warning); another matrix or pc range is refused (exit 2).
+   - Implemented by `scripts/grade_gate.py` (`--mask`, `--exclude`, `--faces`, `--waive`). A file in `edited/` (or `--edited`) needs `--mask` and `--exclude`; an empty list states "nothing to mask". The reframe step writes `--faces` as `{fps, boxes: [[frame, x0, y0, x1, y1] | [frame, null]]}` in canvas px (null ends a track).
+   Why: captions alone gave sharpness x7.2 (luma, sat x1.00) on an ungraded clip. Tested: with the whole-area rule, a masked ungraded captioned clip read luma/sat/sharp x0.97-1.03; unmasked, sharpness passed at x1.4.
    HF: docs/prompting/color-grading.mdx:10-11; packages/cli/src/media-use/lib/grade-analyzer.mjs:215-217
 2. **One metric definition** for the grade gate and the repo-only reference tool `analysis/tools/extract_ref.py`.
-   - luma = mean HSV V, sat = median HSV S, on `cv2.resize(bgr, (90, 160))`.
+   - luma = mean HSV V, sat = median HSV S, on `cv2.resize(rgb, (90, 160))` (RGB frames, `cv2.COLOR_RGB2HSV`; the numbers equal the BGR version's).
    - gray resized to 720 px high (`INTER_AREA`): sharp = Laplacian variance (CV_64F), contrast = std, p2 = 2nd percentile.
    - ratio = out/src, 1 when both are under the floor (luma 1, contrast 1, sat 2.55).
-   - Refines ref 01 §0.3 (old: "Laplacian variance (720p)", no method). Port it to extract_ref.py:44-45 (now mean S, native-size Laplacian) and re-measure ref 01 (→ ref 05 §1 **Reference studies per frame**).
-   Why: native vs 720 px Laplacian differed x6.8 on one soft frame (5.6 vs 38.2).
+   - With a mask, a reduced-size sample counts only when its whole source area is unmasked (the `INTER_AREA`-resized mask reads 1), and the 720 px Laplacian mask is also eroded by 1 px.
+   - Implemented by `metrics()` in `scripts/grade_gate.py`.
+   - Refines ref 01 §0.3 (old: "Laplacian variance (720p)", no method). Port it to extract_ref.py:44-45 (now mean S, native-size Laplacian, cv2 BGR frames): import `grade_gate.metrics`, feed it RGB frames decoded by ffmpeg, and re-measure ref 01 (→ ref 05 §1 **Reference studies per frame**).
+   Why: native vs 720 px Laplacian differed x6.8 on one soft frame (5.6 vs 38.2). Tested: at 1080×1440 one 90×160 cell spans 12×9 source px, so a box grown by 8 px still bled caption pixels into neighbouring samples through the resize, and the 3×3 Laplacian reached across the mask edge.
    HF: packages/cli/src/measure/look.ts:7,26-43; packages/cli/src/measure/media.ts:282-284
 3. **Name the matrix at every RGB hop.** Refines ref 01 §7 chain and SKILL path B (old: no matrix named). Input is tagged BT.709 tv (→ ref 03 §1 **Normalise in every clip intermediate**); tags at the encode → ref 03 §4 **BT.709 from the head of the graph**.
    - YUV filters first (`lutyuv`, `eq`, `hqdn3d`, `unsharp`), then one RGB stage: `scale=in_color_matrix=bt709:in_range=tv,format=gbrp,<curves,vibrance,colorbalance,glow,vignette>,scale=out_color_matrix=bt709:out_range=tv:flags=accurate_rnd+full_chroma_int,format=yuv420p`.
    - Path B Python frames: ffmpeg-decode with `scale=in_color_matrix=bt709:in_range=tv,format=bgr24`, never `cv2.VideoCapture` (analysis only); encode piped frames with `scale=out_color_matrix=bt709:out_range=tv:flags=accurate_rnd+full_chroma_int,format=yuv420p`.
    - `color=` sources (flash, wash, tint plates): `format=gbrp,scale=out_color_matrix=bt709:out_range=tv:flags=accurate_rnd+full_chroma_int,format=yuv420p`, never `format=yuv420p` alone.
+   - The exit names only matrix and range: libx264 still needs `-x264-params colorprim=bt709:transfer=bt709:colormatrix=bt709` (→ ref 03 §4 **BT.709 from the head of the graph**), and `colr` comes from the mux re-tag.
    Why: max |dRGB| decoded as BT.709: ref 01's chain on untagged input 37 (encoded yuv444p), with `-pix_fmt yuv420p` 40, explicit hops 4. RGB → yuv420p exit: no matrix 33-34, named 3, named + flags 1-3 (no change on flat patches). A `color=` source alone 28-33 (`setparams` first did not help), named 2-4. Decode: cv2 23 (6-patch card) and 35 (palette card), ffmpeg 4.
    HF: packages/engine/src/utils/sdrCaptureColor.ts:1-5
 4. **HDR sources.** Grade and gate only the SDR copy: → ref 03 §1 **SDR at download** and **HDR fallback**.
@@ -194,7 +201,7 @@ Scope: the tagged BT.709 clip intermediate → graded footage, and the grade gat
    - dark: gain to mean V 145-170 (night footage: the Defaults +10% only). flat: steeper S until contrast ≥ x1.10.
    - Low headroom (> 3% of pixels at max(R,G,B) ≥ 228, which a x1.10 gain clips): no `eq` brightness or gain; RGB `curves=interp=pchip:all='0/0 0.5/M 1/1'`, M up from 0.62 until luma ≥ x1.10.
    - Then one look.
-   Why: on a bright source (16.6% at ≥ 228; YHIGH headroom 1.135 missed it) ref 01's eq gave luma x1.105 with +16.6 pp clip; a x1.10 gain x1.077, +16.6 pp; pchip M 0.62 x1.054, M 0.70 x1.104, +0.1 pp. A natural spline on a steep S hit 255 at input 208.
+   Why: on a bright source (16.6% at ≥ 228; YHIGH headroom 1.135 missed it) ref 01's eq gave luma x1.105 with +16.6 pp clip; a x1.10 gain x1.077, +16.6 pp; pchip M 0.62 x1.054, M 0.70 x1.104, +0.1 pp. A natural spline on a steep S hit 255 at input 208. Tested: ref 01's chain assumes headroom. On a saturated plate (testsrc2, mean V 180) it pushed 28.3 pp of pixels to max(R,G,B) ≥ 250 and failed the clip gate; on a dull, soft plate (mean V 135) it passed every gate (luma x1.26, sat x1.45, sharp x3.66, contrast x1.09, p2 −3, warm +7, clip +0.0 pp).
    HF: packages/cli/src/media-use/lib/grade-analyzer.mjs:116-129,151-153; packages/core/src/colorGroups.ts:1-6
 6. **Cast check on neutral pixels.** Refines ref 01 §7 (old: constant `colorbalance=rm=0.02:bm=-0.02`).
    - Per group: pixels outside the face box x1.5 with HSV S < 0.30 and 0.2 < V < 0.9; skip under 5% of the frame.
@@ -212,13 +219,14 @@ Scope: the tagged BT.709 clip intermediate → graded footage, and the grade gat
    - contrast ≥ x1.00 (target 1.10-1.15); p2 ≤ source + 6.
    - Pixels with max(R,G,B) ≥ 250 rise ≤ 1 pp in the face box, ≤ 3 pp overall; mean(R − B) rises ≤ 12.
    - Skin (inner 60% of the face box): saturation-weighted circular-mean hue 10-25°, drift ≤ 5°; dark skin (median V < 110) keeps ≥ 0.98x face std and median S.
-   - All thresholds initial (HF's 12 is still "to be calibrated"); calibrate the clip gate on real clips.
-   Why: a 50% screen glow passed luma (x1.116) and sharpness (x2.41) with p2 +10; Y ≥ 235 saw 0% of a 16.6% channel clip.
+   - All thresholds initial (HF's 12 is still "to be calibrated"); calibrate the clip gate on real clips (untested: every threshold here is measured on synthetic plates only).
+   - Implemented by `scripts/grade_gate.py`: each gate `{ok, measured, limit, waived}`; face gates are null without `--faces`; `--waive` only for request overrides.
+   Why: a 50% screen glow passed luma (x1.116) and sharpness (x2.41) with p2 +10; Y ≥ 235 saw 0% of a 16.6% channel clip. Re-tested, the glow's p2 rise depends on the plate and the glow width: a full-res `gblur=sigma=20` screen at 50% on a dull plate gave only p2 +4/+5; a wider unthresholded glow (about sigma 60 at full res) at 50% over ref 01's chain gave p2 +9 and failed only p2. Contrast never caught haze (x1.06-1.13), so p2 is the haze gate in practice.
    HF: packages/cli/src/measure/look.ts:79-86; packages/studio/src/components/editor/colorGradingFrameAnalysis.ts:173-191; docs/prompting/color-grading.mdx:104
 9. **One sheet, measured log.** Adds the grade to SKILL step 7's review (other sheets → ref 05 §1 **Review sheets**).
-   - `qc/NN/grade_sheet.jpg`: a row per group (≤ 4): source | graded at 0.25/0.5/0.75 of the clip + a 1:1 face crop; read only it.
-   - Log `grade NN luma x1.13 sat x1.31 sharp x1.62 contrast x1.12 p2 +3 clip +0.4pp skin 18° frames=24`.
-   - A stage whose toggle moves mean |d| < 0.5/255 did nothing: fix or drop it.
+   - `qc/NN/grade_sheet.jpg`: a row per group (≤ 4): source | graded at 0.25/0.5/0.75 of the clip + a 1:1 face crop; read only it. Not built by a script yet.
+   - Log `grade NN luma x1.13 sat x1.31 sharp x1.62 contrast x1.12 p2 +3 warm +4 clip +0.4pp skin 18° frames=24` (`skin -` without a face; ` FAIL gate,gate` appended on failure); `grade_gate.py` writes it to stderr and the JSON `log`.
+   - A stage whose toggle moves mean |d| < 0.5/255 did nothing: fix or drop it (a grade-step check, not in the gate).
    Why: command success is not a rendered look; glow is judged at 1:1.
    HF: skills/media-use/references/media-treatments.md:137-147,199-201
 

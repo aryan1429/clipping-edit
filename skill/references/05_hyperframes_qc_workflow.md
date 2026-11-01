@@ -16,6 +16,7 @@ Scope: gates on the staged render, review sheets, review notes, reference studie
    - Pairs: raw ↔ edited at the same k; source ↔ output through `remap()` (→ ref 03 §2 **One clock**).
    - Pair metrics: `settb=1/1,setpts=N` after each `select`, then `psnr`/`ssim` with `shortest=1:repeatlast=0`; rows must equal pairs asked.
    - Samples: first and last frame; a 1 fps grid at t = i + 0.5 s (the grade gate's, → ref 04 §3 **Grade and gate the footage only**); k−1..k+1 around each cut and accent; each chunk's fully built frame.
+   - Implemented by `scripts/cliplib.py` `decode_frames_rgb` (used by `grade_gate.py`, which refuses a short decode with exit 2); `cuts.py` reads every frame in one decode.
    Why: without `-fps_mode passthrough`, 4 picks gave 62 frames (`select` alone) or 3 (with `setpts`); after 2 dropped frames, PTS pairing read 24-25 dB on identical pictures, index pairing 45-53 dB.
    HF: packages/cli/src/measure/media.ts:212,339-341; packages/cli/src/commands/measure/frames.ts:52-75; packages/producer/src/regression-harness.ts:607-620,654-663
 2. **Stage, validate, promote.** Refines ref 01 §0.1 and QC (old: "asserts `duration <= 59.5 s` (ffprobe, or `ffmpeg -i` when ffprobe is absent)"; "Duration ≤ 59.5 s (ffprobe or `ffmpeg -i`)").
@@ -24,14 +25,16 @@ Scope: gates on the staged render, review sheets, review notes, reference studie
    - Count frames by decoding, never by `-c copy` packets.
    - Header (→ ref 03 §1 **Probe once**): canvas size, fps, `yuv420p`, one 48 kHz stereo AAC. Tracks, audio length, mux structure and colour tags → ref 03 §4 **Delivery gate**.
    - Never gate on the container `Duration:`.
+   - Implemented for the delivery file by `scripts/finalize_mux.py`: it muxes to a staged name, runs ref 03 §4 **Delivery gate** (frames, decode errors, ≤ `--max-dur`) and renames onto `--out` only on a pass; a failed gate keeps the staged file and never touches `--out`; an `--out` still locked after the retries keeps the gated file under its staged name (`rename_blocked`). The `versions/` copy and the per-part EffectCraft counts are not scripted.
    Why: a 2.5 s picture muxed with 3 s audio read `Duration: 00:00:03.00` while the decode counted 150 frames; `-c copy` counted 178 packets for 177 decoded frames; a damaged file decoded 145/150 frames with 32 error lines.
    HF: packages/producer/src/services/render/artifactTransaction.ts:23-33,230-271
 3. **Events match the plan.** New gate on the staged render. Detector → ref 04 §2 **Classified cut detector** at the render's fps; match events of every class (cut, `fast`, `flash`).
-   - Explained: a 1-frame hit within ±1 of a planned join or a kept source cut; any hit within a whip span ±1 or an accent window (−2 frames to decay end); a source event at its mapped frame.
-   - Every planned hard cut and whip shows a hit. A planned seam without one (a jump cut) passes when d ≥ max(6, 0.5 × seam change) and ≥ 4 × typical within ±1.
-   - Seam change = mean |ΔY| of the two raw frames meeting there, 64×36 grey; < 6 = unverifiable.
-   - P0: a missed cut or whip; an unexplained hit (sliver, doubled segment, part seam); a 2-3-frame hit at a hard cut (black or orphan frame).
+   - Plan: `{fps, frames, cuts, jump_cuts, accent_spans}` in output frames. `cuts` lists every planned join, whip switch frame and kept source cut (source hard/soft events mapped into the clip); `accent_spans` lists flashes, tints, washes, whips and any kept source flash; `jump_cuts` are same-camera punch-ins, never required.
+   - Explained: a 1-frame hit within ±1 of a planned cut; any event starting inside an accent span widened by 1 frame each side (spans start 1 frame before the cause, so this is the −2-frame window; whips ±1); a jump cut explains one event within ±1.
+   - Every planned cut shows a hit. A planned cut without one passes when some d within ±1 is ≥ 6 and ≥ 4 × typical (seam confirmation, on the whole render's d). The 0.5 × seam-change term (mean |ΔY| of the two raw frames meeting there, 64×36 grey; < 6 = unverifiable) is not implemented: the plan carries no seam change, so list a cut under 6 grey levels as a jump cut.
+   - P0: a missed cut or whip; an unexplained hit (sliver, doubled segment, part seam, stray flash); a 2-3-frame hit at a planned cut outside every accent span (black or orphan frame); a shot < 0.20 s between two boundaries, one unplanned (`sliver`); decoded frames ≠ the plan's N.
    - A `sliver_kept` warning (→ ref 03 §2 **No slivers at splices**) is a review item: look at its seams row.
+   - Implemented by `scripts/cuts.py --plan plan.json` on the whole render (exit 1 on any P0). Untested on media: a 2-6-frame whip, a 55% green tint at 60 fps, a 0.35 s white-flash decay inside an accent span, and a full 720-frame edit; the rules cover them through accent spans.
    Why (tested): a black frame at a join read as one 2-frame hit; a 2-frame tint flash, and a 2-frame sliver at 60 fps, as two 1-frame `flash` events; a 0.35 s flash decay as a 4-frame cut; same-camera jumps read d 5.6-8.3 at 4-6% (a 6% jump, d 7.9, passed only via the seam check) and 11.4-12.0 at 10% (found in 1 of 3 files).
    HF: packages/cli/src/measure/diff.ts:67,461-474; packages/cli/src/measure/cuts.ts:97-110
 4. **Captions from pixels.** → ref 04 §1 **Presence, stale and sync gate** (the one caption-pixel method).
@@ -46,6 +49,7 @@ Scope: gates on the staged render, review sheets, review notes, reference studie
    - `ffmpeg -hide_banner -i X -vf "blackdetect=d=0:pix_th=0.10,freezedetect=n=-60dB:d=0.3" -an -f null -`: a black frame, or a freeze outside a planned still (meme freeze), = P0; P1 if the mapped source span shows it too.
    - Sampled indexes: RGB sum ≤ 12 in edited and ≥ 32 in raw on > 0.1% of the central 60% × 60% = P0 (a dropped layer).
    - Frame 0 is the thumbnail: it shows a detected face (speaker or reactor).
+   - Scripted so far only at the tail: `finalize_mux.py`'s `black_tail` check (no black frame in the last 0.1 s, `blackdetect=d=0:pix_th=0.10:pic_th=0.98`).
    Why (tested): 1- and 2-frame blacks were reported exactly, a 30-frame freeze as 0.45 s, a clean noisy clip as nothing; full-frame black-only read 0.7-36% on clean dark shots under the ref 01 grade + `vignette=PI/5`, while the centre read 0 and caught a dropped top panel (0.361).
    HF: packages/engine/src/utils/gpuParityDiff.ts:120-123,208-217; packages/cli/src/utils/craftAudit.ts:128-135
 7. **Framing by shot medians.** Refines ref 01 QC (old: "On 1 fps samples, the face is fully in frame on every close shot, eyes at y 22-35%").
@@ -98,13 +102,14 @@ Scope: what ships, safe writes, caching, re-edits, versions, copy fidelity, less
 ### Adopted (default)
 1. **Ship stages, fill a plan.**
    - Direction: each deterministic stage ships as a script with a `SCRIPT_VERSION`; a step hand-written in 2 jobs becomes the next script.
+   - Shipped (`scripts/`): `probe_source.py` (ref 03 §1), `cutlist.py` and `splice.py` (ref 03 §2), `mix_audio.py` (ref 03 §3), `finalize_mux.py` (ref 03 §4), `cuts.py` (ref 04 §2, ref 05 §1), `grade_gate.py` (ref 04 §3), shared helpers in `cliplib.py`. Run them; never re-type their steps.
    - Per clip, Claude writes only the plan `plans/NN-slug.vK.json`: cut word ids (`start_word`, `end_word`, `remove_words`, `keep_gaps`), chunks, accents, SFX ids, grade, mix, ending, `waivers: {finding_id: reason}`.
-   - `cutlist.json` and every later stage file are derived from the plan, never hand-written (→ ref 03 §2 **One compiler per clip**).
+   - `cutlist.json` and every later stage file are derived from the plan (by the shipped script where one exists), never hand-written (→ ref 03 §2 **One compiler per clip**).
    Why: per-job rewrites drift toward the last job's look.
    HF: .agents/skills/changelog-video/SKILL.md:30-46
 2. **Crash-safe writes.**
    - Write a sibling temp `<stem>.tmp-<pid>-<uuid8><ext>`, then `os.replace` (the shipped `cliplib.tmp_path` / `replace_with_retry`). Keep the extension: ffmpeg picks the muxer from it (`out.part` fails with "Unable to choose an output format"; `.mp4` endings work).
-   - Windows: retry `PermissionError` (a file held open) after 10, 20, 40, 80, 160, 320, 640 ms (1.27 s), then raise.
+   - Windows: retry `PermissionError` (a file held open) after 10, 20, 40, 80, 160, 320, 640 ms (1.27 s), then raise. Every shipped script writes its outputs this way.
    - A dir rename onto an existing dir also raises `PermissionError`: for cache dirs, keep theirs (ref 05 §2 **Stage cache = key + schema + sentinel**).
    Why: a kill mid-write truncates the real file; time-named temps collide.
    HF: skills/media-use/scripts/transcript-cut.mjs:123-125; packages/core/src/renameWithRetry.ts:5-8; packages/cli/src/whisper/transcribe.ts:303-315
