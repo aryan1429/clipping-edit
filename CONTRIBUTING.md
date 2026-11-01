@@ -13,6 +13,7 @@ Contributions are welcome. You can improve the skill, add a study of a new refer
 3. **Write the raw breakdown:**
    - Reference Shorts go in `analysis/refs/refN.md`.
    - Tutorials go in `analysis/tutorials/NN_name.md`.
+   - Studies of other open-source tools go in `analysis/repos/<name>.md`. Cite each lesson as `path:lines` in that repo, with the commit you studied. Respect its licence: re-implement ideas, don't paste code.
    - Record timestamps, what is on screen and the exact numbers you measured.
 4. **Distil the rules** into `skill/references/NN_short_name.md`, using the next free number.
    - Start with the source link and a one-line scope.

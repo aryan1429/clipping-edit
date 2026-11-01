@@ -97,16 +97,20 @@ skill/                 the Claude Code skill (install this folder)
   SKILL.md             pipeline and defaults
   references/          numbered style and workflow studies (01 = clip style, 02 = picking/workflow)
   scripts/preflight.py finds Python packages, ffmpeg, CUDA, EffectCraft and the font
+  scripts/cliplib.py   shared helpers for the stage scripts (ffprobe-optional probing, exact decodes, atomic writes)
 analysis/              raw study material behind the references (repo only; not needed in the installed skill)
   refs/                per-reference-Short breakdowns
   tutorials/           per-tutorial breakdowns
+  repos/               studies of other open-source video tools (HyperFrames)
   tools/extract_ref.py extracts cuts, frame grids, luma/sat/sharpness stats and a transcript from a video
+tests/                 synthetic-media tests for the scripts (repo only); fixtures.py builds every test input with ffmpeg + numpy
 ```
 
 ## Status
 
 - Done: the style spec, the moment-picking rules and the end-to-end workflow in `SKILL.md`.
-- In progress: the render scripts (reframe, captions, grade). Until they land, Claude writes them per job by following the references.
+- In progress: a study of [HeyGen HyperFrames](https://github.com/heygen-com/hyperframes) (Apache-2.0). It covers frame-exact transcript cuts, click-free splices, ducking from word timings, loudness and true-peak gates, BT.709 tagging, HDR/VFR intake, cut detection, caption timing contracts and review sheets. Raw notes and draft rules are in `analysis/repos/`. The verified rules become `skill/references/03-05`.
+- In progress: the stage scripts. Done so far: shared helpers (`skill/scripts/cliplib.py`) and test fixtures. Until the scripts land, Claude writes the stages per job by following the references.
 
 ## Responsible use
 
