@@ -6,3 +6,6 @@ Pillow
 imageio-ffmpeg
 # Optional: torch (CUDA build) only if you add GPU-based extras; faster-whisper uses CTranslate2 and does not need it.
 # torch
+# Optional: scipy (L1-optimal camera path in face_track.py; falls back without it), matplotlib (face_track.py qc plot)
+# scipy
+# matplotlib

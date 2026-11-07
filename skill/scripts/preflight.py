@@ -1,8 +1,13 @@
 """clipping-edit preflight: find the tools this skill needs and print where they are.
 
-usage: python preflight.py [--json-only]
+usage: python preflight.py [--json-only] [--model PATH]
 
-Checks Python modules, ffmpeg, CUDA, the EffectCraft CLI and the Montserrat Black font.
+Checks Python modules, ffmpeg, CUDA, the EffectCraft CLI, the Montserrat Black font and the YuNet face model
+(face_track.py). YuNet search order (same as face_track.find_model): --model PATH, env CLIP_YUNET_MODEL (when set,
+a missing file is reported, never silently replaced), then in each of ./models, ./models/yunet, ./ (cwd),
+<skill>/models, ~/models/yunet, ~/models, ~/.cache/opencv_zoo, ~/.cache/opencv_zoo/face_detection_yunet: the known
+file names (face_detection_yunet_2023mar.onnx, ..._2023mar_int8.onnx, ..._2022mar.onnx), else the newest-named
+face_detection_yunet*.onnx. A found model is test-loaded (a truncated download is reported).
 Prints a status table, then one line `PREFLIGHT_JSON {...}` with the resolved paths.
 Exit 0 when every required piece is present (optional ones may be missing), exit 1 otherwise.
 Works on Windows, macOS and Linux; uses only the standard library plus whatever it finds.
@@ -20,6 +25,11 @@ REQUIRED_MODULES = ["yt_dlp", "faster_whisper", "cv2", "numpy", "PIL"]
 OPTIONAL_MODULES = ["imageio_ffmpeg", "torch"]
 EC_NAMES = ["effectcraft-cli", "effectcraft-cli.exe", "effectcraft"]
 FONT_FILES = ["Montserrat-Black.ttf", "Montserrat-Black.otf", "MontserratBlack.ttf"]
+YUNET_FILES = ["face_detection_yunet_2023mar.onnx", "face_detection_yunet_2023mar_int8.onnx",
+               "face_detection_yunet_2022mar.onnx"]
+YUNET_HINT = ("not found - download face_detection_yunet_2023mar.onnx from the OpenCV Zoo "
+              "(github.com/opencv/opencv_zoo, models/face_detection_yunet) into ./models or ~/models/yunet, "
+              "or set CLIP_YUNET_MODEL / pass --model")
 
 
 def check_module(name):
@@ -124,8 +134,53 @@ def find_font():
     return None, "not found - install Montserrat (Google Fonts) or set CLIP_FONT; fallback Arial Black"
 
 
+def find_yunet(explicit=None):
+    """Same search order as face_track.find_model (kept stdlib-only here). explicit "" = --model without a path."""
+    if explicit is not None:
+        if not explicit:
+            return None, "--model given without a path"
+        if Path(explicit).is_file():
+            return str(Path(explicit).resolve()), "--model"
+        return None, f"--model not found: {explicit}"
+    env = os.environ.get("CLIP_YUNET_MODEL")
+    if env:
+        if Path(env).is_file():
+            return str(Path(env).resolve()), "CLIP_YUNET_MODEL"
+        return None, f"CLIP_YUNET_MODEL set but not found: {env} (face_track.py exits 2 on it; fix or unset it)"
+    home = Path.home()
+    dirs = [Path.cwd() / "models", Path.cwd() / "models" / "yunet", Path.cwd(),
+            Path(__file__).resolve().parents[1] / "models", home / "models" / "yunet", home / "models",
+            home / ".cache" / "opencv_zoo", home / ".cache" / "opencv_zoo" / "face_detection_yunet"]
+    for d in dirs:
+        for f in YUNET_FILES:
+            if (d / f).is_file():
+                return str((d / f).resolve()), str(d)
+        if d.is_dir():
+            hits = sorted(d.glob("face_detection_yunet*.onnx"))
+            if hits:
+                return str(hits[-1].resolve()), str(d)
+    return None, YUNET_HINT
+
+
+def check_yunet_loads(path):
+    """True when cv2 has FaceDetectorYN and the model loads (catches a truncated download)."""
+    try:
+        import cv2
+        if not hasattr(cv2, "FaceDetectorYN"):
+            return False, f"cv2 {cv2.__version__} has no FaceDetectorYN (needs opencv-python 4.5.4+)"
+        cv2.FaceDetectorYN.create(path, "", (320, 240), 0.6, 0.3, 50)
+        return True, "loads"
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"[:80]
+
+
 def main():
     json_only = "--json-only" in sys.argv
+    model_arg = None
+    if "--model" in sys.argv:
+        i = sys.argv.index("--model")
+        nxt = sys.argv[i + 1] if i + 1 < len(sys.argv) else ""
+        model_arg = "" if nxt.startswith("--") else nxt
     rows = []  # (item, status, required, detail)
     res = {"python": sys.executable, "python_version": platform.python_version(), "os": platform.system()}
 
@@ -155,6 +210,14 @@ def main():
     font, detail = find_font()
     rows.append(("Montserrat Black", bool(font), False, font or detail))
     res["font"] = font
+
+    yunet, detail = find_yunet(model_arg)
+    if yunet:
+        ok, why = check_yunet_loads(yunet)
+        detail = f"{yunet} ({detail})" if ok else f"{yunet}: {why}"
+        yunet = yunet if ok else None
+    rows.append(("YuNet face model", bool(yunet), False, detail))
+    res["yunet_model"] = yunet
 
     missing = [r[0] for r in rows if r[2] and not r[1]]
     res["missing_required"] = missing
