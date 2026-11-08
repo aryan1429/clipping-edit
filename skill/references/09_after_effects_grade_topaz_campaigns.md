@@ -126,6 +126,31 @@ and never run AE and Topaz at the same time on one 4 GB GPU.
 6. Single-frame spot renders do not show any of this (one frame never triggers MFR); spot-check 30-60 frames with the
    memory sampler before a batch.
 
+**Adversarial review findings (a two-lens review per delivered clip, visual + copy/brief, each P0/P1 checked by a
+skeptic agent) and the fixes now in the pipeline:**
+- *Branded cutaways in the source* (event audience/wide shots full of another chain's logos, 1.4-4 s) and *the host's
+  camera under the CEO's first words / on the cover frame*: hold a clean close-up frame of the speaker over the span
+  (`freezes: [{f0, f1, src}]` -> a duplicate footage layer with time-remap held at `src`, its own stabilised position,
+  a slow 6 % push) while the audio runs on; the caption layout gets the held face box so captions still clear it.
+  Choose `src` with eyes open and mouth near-closed.
+- *Ghost hands in the blurred band*: a band sampled at face height picks up gesturing hands as orange blobs; sample the
+  backdrop near the top of the frame (below any burned-in banner) beside the face.
+- *Over-sharpened AI upscale*: the preset's Sapphire sharpen on Topaz-reconstructed 1080p footage turned curtains into
+  blotchy speckle and skin waxy/crunchy; lower that effect's amount (0.5 -> 0.2) on upscaled clips only; 4K-native clips
+  keep the preset as is.
+- *Close-ups leave no face-free caption band*: set the crop to the full source height, stabiliser room 1.0, a smaller
+  drop, 3-word chunks and a lower band bottom; when a single chunk still collides, let it stand alone (`solo_words`) so
+  it fits the gap between title and hair.
+- *Copy*: glue a number to its unit ("$10" + "BILLION" in two chunks read as ten dollars); break before a word that
+  would show for 1-2 frames at a chunk's end (`brk_after`); a kept word starting a few ms inside a removed range is
+  dropped by the cut list (its warnings say `word_dropped`) - restore it, the audio keeps it; verify product names
+  online (ASR "moon agent cards" = the product "MoonAgents Card").
+- *SFX timing*: `mix_audio.py` already lands each hit's peak on `frame + 1` - pass the accent frame, never a frame
+  pre-shifted by the sample's peak offset (that put hits ~0.2 s early and still passed the gate, which is relative);
+  a sound whose loudest moment is not its hit fails `sfx_align` - swap it for another library sound.
+- `grade_gate.py --edited` against the raw crop fails sharpness/contrast on re-framed output (stabiliser + push-ins
+  zoom ~1.2x, the band is blurred, the preset lifts shadows): check the face at 1:1 by eye and record a waiver.
+
 ## 5. Colour correction from a user preset (`.ffx`)
 
 - Apply the user's preset file directly: `adj.applyPreset(new File("<preset>.ffx"))` on a full-frame adjustment layer.

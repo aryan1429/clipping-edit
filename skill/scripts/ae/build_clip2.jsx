@@ -28,7 +28,7 @@
         // anchor 180 px in from the edge: the 340 % layer still covers 0..W (540 - 180*3.4 < 0) and the face maps off-canvas
         var bx = (P.anchor[0] > P.W / 2) ? 180 : P.W - 180;
         TG(bgl).property("ADBE Scale").setValue([340, 340]);
-        TG(bgl).property("ADBE Anchor Point").setValue([bx, P.anchor[1]]);
+        TG(bgl).property("ADBE Anchor Point").setValue([bx, (P.bg_y !== undefined) ? P.bg_y : P.anchor[1]]);
         TG(bgl).property("ADBE Position").setValue([P.W / 2, 300]);
         var bg = comp.layers.add(bgc); bg.name = "BG blur fill"; bg.quality = LayerQuality.BEST;
         var gb = bg.property("ADBE Effect Parade").addProperty("ADBE Gaussian Blur 2"); gb.property(1).setValue(120); gb.property(3).setValue(1);
@@ -65,6 +65,24 @@
         }
         log("footage: stab keys " + pt.length + " (" + P.stab_mode + "), cam keys " + ts.length + ", drop " + P.drop + ", mask_top " + P.mask_top);
 
+        // 3b. freeze-frames over a span (e.g. a branded audience cutaway in the source): hold frame src at its own
+        //     stabilised position, with a slow 6 % push-in so the hold reads as a deliberate move
+        for (var z = 0; P.freezes && z < P.freezes.length; z++) {
+            var fz = P.freezes[z], Fz = L.duplicate();
+            Fz.name = "freeze f" + fz.f0 + "-" + fz.f1 + " (holds f" + fz.src + ")";
+            var zp = TG(L).property("ADBE Position").valueAtTime(fz.src * f1, false), zs = TG(L).property("ADBE Scale").valueAtTime(fz.src * f1, false);
+            Fz.timeRemapEnabled = true;
+            var trm = Fz.property("ADBE Time Remapping");
+            while (trm.numKeys) trm.removeKey(1);
+            trm.setValue(fz.src * f1);
+            var zP = TG(Fz).property("ADBE Position"), zS = TG(Fz).property("ADBE Scale");
+            while (zP.numKeys) zP.removeKey(1); while (zS.numKeys) zS.removeKey(1);
+            zP.setValue(zp);
+            zS.setValuesAtTimes([fz.f0 * f1, (fz.f1 + 1) * f1], [[zs[0], zs[1]], [zs[0] * 1.06, zs[1] * 1.06]]);
+            Fz.inPoint = fz.f0 * f1; Fz.outPoint = (fz.f1 + 1) * f1;
+            log("freeze " + Fz.name + " pos " + Math.round(zp[0]) + "," + Math.round(zp[1]) + " scale " + zs[0].toFixed(1));
+        }
+
         // 4. grade: the user's Premium Glow CC preset (footage only - text sits above it)
         var adj = comp.layers.addSolid([1, 1, 1], "Premium Glow CC", P.W, P.H, 1, dur);
         adj.adjustmentLayer = true; adj.applyPreset(new File(P.preset));
@@ -72,6 +90,7 @@
         for (var q = 1; q <= fx.numProperties; q++) names.push(fx.property(q).matchName);
         log("grade fx: " + names.join(", "));
         if (P.grade && P.grade.lumetri) { var lum = fx.property("ADBE Lumetri"); for (var key in P.grade.lumetri) { lum.property(key).setValue(P.grade.lumetri[key]); log("lumetri " + key + " = " + P.grade.lumetri[key]); } }
+        if (P.grade && P.grade.sharpen_amp !== undefined) { var shp = fx.property("S_Sharpen"); if (shp) { shp.property("S_Sharpen-0050").setValue(P.grade.sharpen_amp); log("S_Sharpen amp = " + P.grade.sharpen_amp); } else log("S_Sharpen missing - sharpen_amp not applied"); }
 
         // 5. captions: one text layer per word at the measured layout position
         function textLayer(str, font, size, fill, strokeW) {
