@@ -1,0 +1,12 @@
+# MoonPay x ClipFarm brief - rules every clip must pass (from MoonPay Clipper Brief.pdf)
+- Speaker: Ivan Soto-Wright (MoonPay CEO). Ivan must be the MAIN speaker; >= half the clip is him speaking/visible. Host questions only as a short lead-in.
+- Length: 20-50 s final (brief says ~15-50; "pick the best 30 seconds"). Our target 25-45 s, hard max 49 s.
+- Every pick must contain PRODUCT TALK: Ivan names a MoonPay product and says what it does, OR explains the problem it fixes, OR gives a real number/fact about MoonPay. Or he talks about the future of finance / crypto industry with MoonPay context.
+- MoonPay products that count: Onramp / Offramp (buy & sell crypto with normal money); MoonPay Trade (trade & settle across many chains); MoonPay Commerce (shops/apps take crypto payments); MoonPay Enterprise (stablecoin tools for banks & fintechs); MoonPay Institutional (digital assets for big financial firms); MoonPay Agents (payment rails so AI agents can hold and send funds); PayBox (safe vault so an AI agent can pay online); Open Wallet Standard / OWS (free open wallet standard for AI agents to transact).
+- DO NOT USE parts about: laws, licenses, regulators, regulation, compliance rules, specific acts (e.g. Genius Act, Clarity Act), politics, war, religion. Parts where Ivan is not the main speaker.
+- NOT the point: hype with no product talk; price talk or coin picks ("this will go up").
+- Our on-screen text / title / caption must NEVER: say "best", "safest", "guaranteed", "risk-free", "100% secure", "unhackable", "buy now", "last chance", "don't miss out"; give price talk; name any other company, coin or NFT; mention laws/licenses/regulators/politics; add any claim or number not said by Ivan in the clip; change what Ivan said.
+- Safe numbers we may use in text: only numbers Ivan says in the clip; "35M+ customers", "180+ countries", "1500+ partners" are pre-approved brand facts.
+- Prefer windows where Ivan does NOT name other companies/coins/NFTs (e.g. Amazon, Visa, PayPal, Solana, Bitcoin, Ethereum). If a passing generic mention is unavoidable, flag it.
+- On-screen title (REQUIRED): ONE title line, must mention the REAL MoonPay product name discussed. Patterns: "MoonPay's CEO explains ____", "What is ____? Ivan Soto-Wright explains.", "Why MoonPay built ____", "What people don't realize about crypto" (only with a product named elsewhere is not allowed - title must have the product).
+- Post caption: short, only facts from the clip, tag: TikTok @moonpayhq, Instagram @moonpay, YouTube Shorts @moonpayhq.
