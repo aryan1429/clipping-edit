@@ -144,7 +144,7 @@ skeptic agent) and the fixes now in the pipeline:**
 - *Copy*: glue a number to its unit ("$10" + "BILLION" in two chunks read as ten dollars); break before a word that
   would show for 1-2 frames at a chunk's end (`brk_after`); a kept word starting a few ms inside a removed range is
   dropped by the cut list (its warnings say `word_dropped`) - restore it, the audio keeps it; verify product names
-  online (ASR "moon agent cards" = the product "MoonAgents Card").
+  online (ASR split one product name into three plain words).
 - *SFX timing*: `mix_audio.py` already lands each hit's peak on `frame + 1` - pass the accent frame, never a frame
   pre-shifted by the sample's peak offset (that put hits ~0.2 s early and still passed the gate, which is relative);
   a sound whose loudest moment is not its hit fails `sfx_align` - swap it for another library sound.
