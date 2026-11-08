@@ -74,7 +74,7 @@ angle. Pass those as `--cut-frames` (hard reset), not `--jump-cuts`; as jump cut
 ## 4. The AE comp: the whole edit in AE (`build_clip2.jsx`, data in a `var PLAN = {...}` include)
 
 Bottom to top:
-1. **blurred fill** (only when there is a drop or a mask): the same footage at ~340 %, anchored on the backdrop ~180 px
+1. **blurred fill** (only when there is a drop or a mask): a canvas-size precomp holding the footage at ~340 %, anchored on the backdrop ~180 px
    in from the frame edge on the side away from the face, blur 120, brightness -30, so the band above the footage is the
    scene's colour. Anchoring on the face (or a 140 % copy pushed down) left the band black or showed a ghost face; check
    that the layer still covers 0..W (`W/2 - anchor_x * scale < 0` and the mirror for the right edge).
@@ -106,6 +106,25 @@ Spot-render 2-3 single frames (`-s f -e f`, ~3 s each) to check the look before 
 **Disk and memory on a laptop:** AE's disk cache filled the drive (23 GB, error 6662) and its RAM commit grew the
 pagefile. Disable the disk cache in the prefs (back the prefs file up first), clear it between chunks, cap `-mem_usage`,
 and never run AE and Topaz at the same time on one 4 GB GPU.
+
+**Render memory blow-up (16-19 GB before the first frame) - causes and fixes, measured by bisecting the comp:**
+1. A blurred, heavily scaled layer (the 340 % fill) directly in the comp **under a Sapphire effect on an adjustment
+   layer** (the preset's `S_Sharpen`) - AE hands Sapphire the layer's whole transformed extent. Put the scaled copy in a
+   canvas-size precomp and blur the precomp layer: same look, 60 frames in ~10 s at ~5.6 GB peak. Footage + preset
+   alone, or the comp without the preset, never blew up.
+2. **Multi-Frame Rendering** multiplies whatever one frame needs by the core count; `-mem_usage` does not cap it, and
+   aerender ignored a smaller "Number of Concurrent Frame Renders". Render with MFR off
+   (`["Concurrent Frame Rendering"] "Enable Concurrent Frame Renders" = 00` in the prefs).
+3. **The AE GUI rewrites its prefs file on quit** (it dropped the MFR section and re-enabled the disk cache), so every
+   GUI build stage silently undoes the render prefs. Re-pin them (`scripts/ae/ae_prefs.py`) right before every aerender
+   call, not once per job.
+4. Watch AE's render engine (`AfterFX.com`) private bytes and free RAM from the driver, and kill the aerender tree above a
+   cap; on a retry halve the chunk. Measure private bytes, not the working set (the working set showed 3.9 GB while free
+   RAM was already down to 1.3 GB).
+5. aerender can hang without starting its engine after a killed run (a stale `dynamiclinkmanager`): end that process
+   before each call, and treat "no `AfterFX.com` after 90 s" as a hang.
+6. Single-frame spot renders do not show any of this (one frame never triggers MFR); spot-check 30-60 frames with the
+   memory sampler before a batch.
 
 ## 5. Colour correction from a user preset (`.ffx`)
 

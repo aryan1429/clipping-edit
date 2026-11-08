@@ -19,14 +19,18 @@
         var comp = proj.items.addComp(P.name, P.W, P.H, 1, dur, P.fps);
         comp.bgColor = [0, 0, 0]; comp.motionBlur = false;
 
-        // 1. blurred fill (only seen above a dropped / masked footage layer): a 280 % blow-up of the backdrop beside the
+        // 1. blurred fill (only seen above a dropped / masked footage layer): a 340 % blow-up of the backdrop beside the
         //    face (the side away from it), so the band above the footage is the scene's colour, never black or a ghost face
-        var bg = comp.layers.add(foot); bg.name = "BG blur fill"; bg.quality = LayerQuality.BEST;
-        // anchor 200 px in from the edge: the 280 % layer still covers 0..W (540 - 200*2.8 < 0) and the face maps off-canvas
+        //    The blow-up lives in a canvas-size precomp: a 340 % layer straight in the comp made AE hand Sapphire S_Sharpen
+        //    (preset adjustment layer) a ~3.7k x 6.5k blurred input and aerender committed 16-19 GB per frame.
+        var bgc = proj.items.addComp(P.name + " BG", P.W, P.H, 1, dur, P.fps);
+        var bgl = bgc.layers.add(foot); bgl.quality = LayerQuality.BEST;
+        // anchor 180 px in from the edge: the 340 % layer still covers 0..W (540 - 180*3.4 < 0) and the face maps off-canvas
         var bx = (P.anchor[0] > P.W / 2) ? 180 : P.W - 180;
-        TG(bg).property("ADBE Scale").setValue([340, 340]);
-        TG(bg).property("ADBE Anchor Point").setValue([bx, P.anchor[1]]);
-        TG(bg).property("ADBE Position").setValue([P.W / 2, 300]);
+        TG(bgl).property("ADBE Scale").setValue([340, 340]);
+        TG(bgl).property("ADBE Anchor Point").setValue([bx, P.anchor[1]]);
+        TG(bgl).property("ADBE Position").setValue([P.W / 2, 300]);
+        var bg = comp.layers.add(bgc); bg.name = "BG blur fill"; bg.quality = LayerQuality.BEST;
         var gb = bg.property("ADBE Effect Parade").addProperty("ADBE Gaussian Blur 2"); gb.property(1).setValue(120); gb.property(3).setValue(1);
         bg.property("ADBE Effect Parade").addProperty("ADBE Brightness & Contrast 2").property(1).setValue(-30);
         bg.enabled = (P.drop > 0 || P.mask_top > 0);
