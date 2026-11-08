@@ -23,6 +23,7 @@ Long video -> best moments -> finished short clips. Style spec = `references/01_
 | QC gates, review sheets, reference studies | ref 05 §1 |
 | Caching, re-edits, versions, lessons loop | ref 05 §2 |
 | Picking non-copyright background music | ref 06 |
+| After Effects edit, colour-correction preset (.ffx), Topaz enhance / 60 fps, brand-campaign briefs (product title, tags, banned words) | ref 09 |
 
 Refs 03-05 come from a study of HeyGen HyperFrames (Apache-2.0). They win on technical correctness where 01/02 are silent and never on style.
 
@@ -38,7 +39,9 @@ Any of these can be changed by the request ("9:16", "under 30 s", "all clips", "
 | Ending | Clean hard cut right after the payoff. Meme freeze + skull emoji only when the moment is a comedic fail / "no way" reaction that fits |
 | Clip count | Show all 3-8 candidates; render the top 3 scoring >= 7/10, always at least #1 |
 | Captions | Every word inside the canvas's safe area on every frame: `scripts/captions.py` lays out, `scripts/caption_gate.py` checks the pixels (ref 07) |
-| Editing tool | EffectCraft when installed; otherwise ffmpeg + ASS/libass + Pillow |
+| Editing tool | EffectCraft when installed; otherwise ffmpeg + ASS/libass + Pillow. After Effects (path C) when the request asks for AE or an AE preset |
+| Colour correction in AE | The user's colour-correction preset `.ffx` applied with `applyPreset` on one adjustment layer under captions and title (default preset: "Premium Glow CC" = S_Sharpen + Magic Bullet Looks + Lumetri C25/H10/S45/W20/Sat170 + B&C 15/20; path from env `CLIP_AE_PRESET`), then `grade_gate.py`; ref 09 section 5 |
+| Enhance | Topaz Video AI (`tvai_up` prob-3 2x + `tvai_fi` apo-8 to 60000/1001) on the face-tracked reframe when Topaz is installed or asked for; de-blend interpolated frames at every cut; ref 09 section 2 |
 | SFX | One per accent, each a different variant (never reuse one sample) |
 | Music bed | Instrumental, mood-matched, licence-safe (CC0 / PD / CC BY / royalty-free; never NC, ND or SA) from `scripts/find_music.py`; credit line in `captions.md` when the licence needs one |
 
@@ -120,6 +123,10 @@ One-line trigger ("clip this video: <url>"): run the whole job without asking qu
 - **Render:** high bitrate (>= 30 Mbps), in parts if memory runs out (frames == sum of parts); then `finalize_mux.py` (one AAC encode, copy-mux, colour tags per ref 03 §4; check EffectCraft's output colour once per version).
 - Anything EffectCraft cannot draw (e.g. colour emoji) -> Pillow PNG imported as a footage layer.
 
+**C. After Effects 2025 (request names AE or an AE preset; ref 09).**
+- Same prep (cut list, splice at the source's native fps, face track) -> Topaz upscale + interpolation (de-blend cuts) -> caption ASS rendered to an alpha overlay (black/white difference matte; libass writes no alpha) + title PNG.
+- `build_clip.jsx` (data in `var PLAN = {...}`): blurred fill, footage with face-anchored push/punch Scale keys and a head-room drop under the title, the colour-correction preset on an adjustment layer, captions, title; render-queue item `H.264 - Match Render Settings - 40 Mbps`, video only; `aerender` with the GPU free (never alongside Topaz), then `finalize_mux.py`.
+
 **B. Fallback: ffmpeg + ASS/libass + Pillow (no EffectCraft).**
 - Crop path -> `face_track.py render` (per-frame crop + scale piped to ffmpeg), or ffmpeg `crop`/`scale` driven from `path.json`.
 - Captions -> `captions.py` writes the ASS (per-word `\an5\pos` events, WrapStyle 2, PlayRes = canvas, ScaledBorderAndShadow) and copies the font to `<ass folder>/fonts`; burn with the layout JSON's `burn.filter`, ffmpeg cwd = `burn.cwd`.
@@ -133,6 +140,7 @@ One-line trigger ("clip this video: <url>"): run the whole job without asking qu
 - **Scripts** (`scripts/`, each prints one JSON object; exit 0 ok, 1 gate failed, 2 bad input; ffprobe optional): `probe_source.py`, `cutlist.py`, `splice.py`, `cuts.py`, `mix_audio.py`, `finalize_mux.py`, `grade_gate.py`, `find_music.py`, `captions.py`, `caption_gate.py`, `face_track.py` (self-tests: `captions.py --self-test`, `caption_gate.py --self-test`, `face_track.py selftest`), with shared helpers in `cliplib.py`. Run with `<python> -P`. Tests live in the repo's `tests/`.
 - `references/06_background_music.md`: choosing a bed (mood → BPM and energy, no vocals under speech, a strong entry from frame 0, phone-speaker low end), sources ranked by safety with verified terms, the licence policy (CC 4.0: syncing music to video makes Adapted Material, so no ND or SA; no NC), Content ID and in-app-sound caveats, and the credit-line format.
 - `references/07_caption_safe_area.md`: why captions left the screen (16 reproduced causes: unmeasured widths, halo not counted, lone long words, two-line low blocks, no horizontal clamp, 9:16 numbers on other canvases, libass font fallback, PlayRes mismatch, ...), safe areas per aspect ratio, the measured fit, face-clear placement, the keyword guard per chunk, typed stage directions, the ASS timing fix, the Windows-safe burn filter, and the pixel gate (every word drawn, safe area, faces, length). Implemented by `scripts/captions.py` and `scripts/caption_gate.py`.
+- `references/09_after_effects_grade_topaz_campaigns.md`: path C (After Effects) stage order, Topaz CLI chain + speed + cut de-blending, head room under a required title (footage drop + blurred fill + banner mask), the AE comp layer stack, applying a colour-correction preset `.ffx`, captions as an alpha overlay, and the brand-campaign workflow (rules file, picker + two-lens adversarial verify, product title, verbatim post captions, per-platform tags, brand-name ASR check).
 - `references/08_face_track_stabilizer.md`: face detection (YuNet + LK flow), tracking, subject choice (auto/group with a fit test, speaker, hand-offs), detector + flow fusion, the L1-optimal smooth camera and steady/lock face stabilisation, resets at cuts, EffectCraft keys, the preview render and the gates (face/margin, face_lost, oscillation, flow- and output-measured face jitter, jump cuts), with tested numbers. Implemented by `scripts/face_track.py`.
 - **New reference shorts** (needs a clone of the repo; `analysis/` is not part of the installed skill folder): download them, run `<python> analysis/tools/extract_ref.py <video.mp4> <outdir>` (metadata, cut times, 1 fps frame grid, luma/sat/sharpness stats, transcript), write the study to `analysis/refs/`, then distil the rules into `references/NN_<topic>.md` (what the editor does, timings, caption style, tools, and the rule it implies for this pipeline).
 - **New tutorials:** one `references/NN_<topic>.md` per video, raw notes in `analysis/tutorials/`.
