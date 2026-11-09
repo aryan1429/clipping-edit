@@ -150,6 +150,37 @@ skeptic agent) and the fixes now in the pipeline:**
   a sound whose loudest moment is not its hit fails `sfx_align` - swap it for another library sound.
 - `grade_gate.py --edited` against the raw crop fails sharpness/contrast on re-framed output (stabiliser + push-ins
   zoom ~1.2x, the band is blurred, the preset lifts shadows): check the face at 1:1 by eye and record a waiver.
+- *Wide stage shots with a tiny speaker* (a keynote camera, the face ~75-100 px for 5-16 s): punch in 1.5x (1.8x on a
+  4K source) about the speaker's face for exactly the shot's frames (`zooms: [{f0, f1, scale, cx, cy}]` -> a ZOOM null
+  above CAM with HOLD keys, so it cuts in and out on the source's own cuts); scale the face boxes the same way before
+  the caption layout. On a 4K wide shot the punch-in also pushed a third-party logo at the frame edge off-canvas -
+  cheaper and livelier than a 5 s hold.
+- *Ghosts in the band, round 2*: any fixed sample point meets the speaker in some shot (he stood at the frame edge);
+  make the band 75 % a flat backdrop colour (median of the backdrop rows over the clip, measured in Python) over
+  25 % blurred footage, so a passing head or hand only tints it.
+- *Delivery size*: CQ 15 / 80 Mbps gave 319 MB for 38 s (over TikTok's ~287 MB in-app upload limit); CQ 18 with a
+  35 Mbps cap gives 105-180 MB per 25-41 s clip with no visible loss (the platforms re-encode to ~5-10 Mbps anyway).
+- *Cover frame*: frame 0 is the default thumbnail - check it shows the speaker with eyes open under the title (or tell
+  the poster to pick a cover).
+
+**The review step itself:** after each clip's QC, build a pack (`review_pack.py`: three 24-tile contact sheets with
+frame numbers, the cover frame, the kept transcript, the caption chunks as displayed with colours, title + post
+captions + gate results) and run two independent reviewers (visual, copy/brief) plus one skeptic per P0/P1 that tries
+to refute it. About a third of the raw findings were downgraded or refuted; every confirmed P1 above was a real
+defect the gates had passed. Fix, re-render, then spot-check the fixed frames by eye.
+
+**Orchestration gotchas from the overnight batch:**
+- One AE GUI at a time: two `ae_run` builds started together wrote each other's log and one project was never saved -
+  queue every GUI build behind the same lock as the renders (aerender alongside one GUI build is fine).
+- AE time remap: removing all keys of `ADBE Time Remapping` hides the property ("cannot set value ... hidden"); keep
+  one key and `setValueAtKey(1, t)` for a held frame.
+- Render watchdog: besides "engine never started", kill aerender when its engine (`AfterFX.com`) disappears for 60 s
+  or the output file stops growing for 4 min - a dead engine left aerender waiting 26 min.
+- `sed -i` on a shell script that is already running does nothing for that run (it keeps reading the old file); write
+  a new follow-up script that waits for the running one's done marker.
+- The SFX picker excludes sounds used anywhere in the job; on a swap it can run dry - fall back to "distinct within
+  this clip" (reuse across clips is fine).
+- A caption word visible for one frame fails `caption_gate.py` (`missing_word`, libass skips it) - re-chunk it.
 
 ## 5. Colour correction from a user preset (`.ffx`)
 

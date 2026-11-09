@@ -30,6 +30,7 @@
         TG(bgl).property("ADBE Scale").setValue([340, 340]);
         TG(bgl).property("ADBE Anchor Point").setValue([bx, (P.bg_y !== undefined) ? P.bg_y : P.anchor[1]]);
         TG(bgl).property("ADBE Position").setValue([P.W / 2, 300]);
+        if (P.bg_color) { var bgs = bgc.layers.addSolid(P.bg_color, "backdrop colour", P.W, P.H, 1, dur); TG(bgs).property("ADBE Opacity").setValue(75); }
         var bg = comp.layers.add(bgc); bg.name = "BG blur fill"; bg.quality = LayerQuality.BEST;
         var gb = bg.property("ADBE Effect Parade").addProperty("ADBE Gaussian Blur 2"); gb.property(1).setValue(120); gb.property(3).setValue(1);
         bg.property("ADBE Effect Parade").addProperty("ADBE Brightness & Contrast 2").property(1).setValue(-30);
@@ -65,6 +66,26 @@
         }
         log("footage: stab keys " + pt.length + " (" + P.stab_mode + "), cam keys " + ts.length + ", drop " + P.drop + ", mask_top " + P.mask_top);
 
+        // 3a. punch-ins on wide stage shots: a ZOOM null above CAM, scaled about the face centre, cutting in and out on
+        //     the shot's own edges (hold keys) so the face reads on a phone without touching the close-ups
+        if (P.zooms && P.zooms.length) {
+            var zm0 = P.zooms[0];
+            var ZM = comp.layers.addNull(dur); ZM.name = "ZOOM (wide-shot punch-ins)";
+            TG(ZM).property("ADBE Anchor Point").setValue([50, 50]);
+            TG(ZM).property("ADBE Position").setValue([zm0.cx, zm0.cy]);
+            cam.parent = ZM;
+            var zt = [0], zv = [[100, 100]];
+            for (var zi = 0; zi < P.zooms.length; zi++) {
+                var zz = P.zooms[zi];
+                zt.push(zz.f0 * f1); zv.push([zz.scale, zz.scale]);
+                zt.push((zz.f1 + 1) * f1); zv.push([100, 100]);
+            }
+            var zsc = TG(ZM).property("ADBE Scale");
+            zsc.setValuesAtTimes(zt, zv);
+            for (var zk = 1; zk <= zsc.numKeys; zk++) zsc.setInterpolationTypeAtKey(zk, KeyframeInterpolationType.HOLD, KeyframeInterpolationType.HOLD);
+            log("zoom null: " + P.zooms.length + " punch-in(s) about " + zm0.cx + "," + zm0.cy);
+        }
+
         // 3b. freeze-frames over a span (e.g. a branded audience cutaway in the source): hold frame src at its own
         //     stabilised position, with a slow 6 % push-in so the hold reads as a deliberate move
         for (var z = 0; P.freezes && z < P.freezes.length; z++) {
@@ -73,8 +94,8 @@
             var zp = TG(L).property("ADBE Position").valueAtTime(fz.src * f1, false), zs = TG(L).property("ADBE Scale").valueAtTime(fz.src * f1, false);
             Fz.timeRemapEnabled = true;
             var trm = Fz.property("ADBE Time Remapping");
-            while (trm.numKeys) trm.removeKey(1);
-            trm.setValue(fz.src * f1);
+            while (trm.numKeys > 1) trm.removeKey(trm.numKeys);   // one key = a held frame (removing all keys hides it)
+            trm.setValueAtKey(1, fz.src * f1);
             var zP = TG(Fz).property("ADBE Position"), zS = TG(Fz).property("ADBE Scale");
             while (zP.numKeys) zP.removeKey(1); while (zS.numKeys) zS.removeKey(1);
             zP.setValue(zp);
