@@ -135,9 +135,11 @@ skeptic agent) and the fixes now in the pipeline:**
   Choose `src` with eyes open and mouth near-closed.
 - *Ghost hands in the blurred band*: a band sampled at face height picks up gesturing hands as orange blobs; sample the
   backdrop near the top of the frame (below any burned-in banner) beside the face.
-- *Over-sharpened AI upscale*: the preset's Sapphire sharpen on Topaz-reconstructed 1080p footage turned curtains into
-  blotchy speckle and skin waxy/crunchy; lower that effect's amount (0.5 -> 0.2) on upscaled clips only; 4K-native clips
-  keep the preset as is.
+- *The preset's Sapphire sharpen amount depends on the source* (`S_Sharpen-0050`, preset value 0.5): on Topaz-
+  reconstructed 1080p footage it turned curtains into blotchy speckle and skin crunchy -> 0.2; on 4K-native footage
+  the preset's glow left skin waxy and hair painterly at 0.5 (a reviewer measured detail well below the plate) ->
+  0.9 (face Laplacian variance 18 -> 40; 1.3 = 60 started to crunch). Pick it from 1:1 crops of one face, not from
+  the contact sheets.
 - *Close-ups leave no face-free caption band*: set the crop to the full source height, stabiliser room 1.0, a smaller
   drop, 3-word chunks and a lower band bottom; when a single chunk still collides, let it stand alone (`solo_words`) so
   it fits the gap between title and hair.
@@ -160,6 +162,21 @@ skeptic agent) and the fixes now in the pipeline:**
   25 % blurred footage, so a passing head or hand only tints it.
 - *Delivery size*: CQ 15 / 80 Mbps gave 319 MB for 38 s (over TikTok's ~287 MB in-app upload limit); CQ 18 with a
   35 Mbps cap gives 105-180 MB per 25-41 s clip with no visible loss (the platforms re-encode to ~5-10 Mbps anyway).
+- *Skin under the preset on warm stage light*: compare the grade gate's warmth delta (mean R-B rise) across the set -
+  one clip at +22 (limit 12, saturation x2.9) next to -10..+6 for the rest showed orange skin in its close-ups.
+  Cool that clip on the preset's own effects (Lumetri temperature `ADBE Lumetri-0007` -15, saturation 115, the
+  preset's Brightness & Contrast brightness 15 -> 3) instead of a global change. A fixed face-box check (share of
+  face pixels with R >= 250) is a quick screen: ~0 % on a cool-lit clip, 15-22 % on warm-lit ones.
+- *Punch-in limit on upscaled sources*: on a 1080p source already cropped at 1.4x and Topaz 2x, a 1.5x AE punch-in is
+  the ceiling - at 1:1 the face is already soft; a reviewer asking for 1.8-2x on such a shot is asking for mush.
+  On 4K sources 1.8x stays sharp.
+- *Watchdog false kills*: free RAM can dip for a second while a chunk starts (0.3 GB free with AE at 257 MB); the
+  driver's retry at half the chunk size recovers - keep the retry, do not drop the free-RAM guard.
+- *Brand-name fragments at cut joins*: ASR word ends run early, so a removal placed at the ASR end of "PayPal" kept
+  ~180 ms of "...pal" (a fresh ASR pass on the rendered file heard "car, a pal, any"). Gate every removal join: run
+  ASR on the delivered audio +-1.5 s around the join and fail if a removed name (or a recognisable piece) is heard.
+  Fix by correcting the word timings before cutting (`asr_fix: {word_id: {start, end}}` -> a patched transcript copy
+  for `cutlist.py`): start the removed word ~60 ms earlier, end it 200-250 ms later or just before the next kept word.
 - *Cover frame*: frame 0 is the default thumbnail - check it shows the speaker with eyes open under the title (or tell
   the poster to pick a cover).
 

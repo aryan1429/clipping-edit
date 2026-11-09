@@ -112,6 +112,7 @@
         log("grade fx: " + names.join(", "));
         if (P.grade && P.grade.lumetri) { var lum = fx.property("ADBE Lumetri"); for (var key in P.grade.lumetri) { lum.property(key).setValue(P.grade.lumetri[key]); log("lumetri " + key + " = " + P.grade.lumetri[key]); } }
         if (P.grade && P.grade.sharpen_amp !== undefined) { var shp = fx.property("S_Sharpen"); if (shp) { shp.property("S_Sharpen-0050").setValue(P.grade.sharpen_amp); log("S_Sharpen amp = " + P.grade.sharpen_amp); } else log("S_Sharpen missing - sharpen_amp not applied"); }
+        if (P.grade && P.grade.bc) { var b2 = fx.property("ADBE Brightness & Contrast 2"); if (b2) { b2.property(1).setValue(P.grade.bc[0]); b2.property(2).setValue(P.grade.bc[1]); log("B&C = " + P.grade.bc.join(" / ")); } }
 
         // 5. captions: one text layer per word at the measured layout position
         function textLayer(str, font, size, fill, strokeW) {

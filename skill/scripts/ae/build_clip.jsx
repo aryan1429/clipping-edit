@@ -1,5 +1,5 @@
 // build_clip.jsx - one MoonPay clip in AE 2025 from PLAN (written by clip_build.py ae).
-// Layers (bottom -> top): blurred fill, Ivan footage (face-anchored scale keys, optional drop + top feather mask),
+// Layers (bottom -> top): blurred fill, speaker footage (face-anchored scale keys, optional drop + top feather mask),
 // Premium Glow CC adjustment layer (the user's .ffx), caption overlay (alpha mov from captions.py ASS), title PNG.
 (function () {
     var P = PLAN;
@@ -30,8 +30,8 @@
         bc.property(1).setValue(-50);
         bg.enabled = (P.drop > 0 || P.mask_top > 0);
 
-        // 2. Ivan footage, scale keys about the face anchor
-        var L = comp.layers.add(foot); L.name = "Ivan"; L.quality = LayerQuality.BEST;
+        // 2. speaker footage, scale keys about the face anchor
+        var L = comp.layers.add(foot); L.name = "Speaker"; L.quality = LayerQuality.BEST;
         var tr = L.property("ADBE Transform Group");
         tr.property("ADBE Anchor Point").setValue([P.anchor[0], P.anchor[1]]);
         tr.property("ADBE Position").setValue([P.anchor[0], P.anchor[1] + P.drop]);

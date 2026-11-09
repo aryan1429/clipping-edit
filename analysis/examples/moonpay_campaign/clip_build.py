@@ -77,6 +77,15 @@ def prep(nn):
     sid = c['source_id']
     src = JOB / 'src' / f'{sid}.mp4'
     tr = JOB / 'asr' / sid / 'transcript.json'
+    if c.get('asr_fix'):
+        # word-timing corrections before cutting: ASR ends some words early, so a cut placed at the ASR word end left an
+        # audible fragment of a removed brand name ("...pal") - review 2026-11-09. {word_id: {"start"?: s, "end"?: s}}
+        a = json.load(open(tr, encoding='utf8'))
+        for w in (a['words'] if isinstance(a, dict) else a):
+            for k, v in c['asr_fix'].get(w['id'], {}).items():
+                w[k] = v
+        tr = d / 'transcript_fixed.json'
+        json.dump(a, open(tr, 'w', encoding='utf8'), ensure_ascii=False)
     one = {'clips': [{k: c[k] for k in ('rank', 'start_word', 'end_word', 'remove_words', 'hook_line', 'payoff_line') if k in c}]}
     one['clips'][0].pop('hook_line', None); one['clips'][0].pop('payoff_line', None)
     json.dump(one, open(d / 'clip_one.json', 'w'), indent=1)
@@ -513,11 +522,7 @@ def ae(nn):
             'title_cy_png': (t['box'][1] + t['box'][3]) / 2, 'title_cy': title_top + (t['box'][3] - t['box'][1]) / 2,
             'drop': drop, 'mask_top': mask_top, 'feather': feather, 'face_top_p10': round(p10, 1), 'scale_keys': scale_keys,
             'anchor': [round(ax, 1), round(ay, 1)], 'accents': acc, 'push': push, 'punch': punch,
-            'grade': c.get('grade', {'lumetri': {'ADBE Lumetri-0020': 140},
-                                     # Topaz-upscaled 1080p footage: the preset's Sapphire sharpen (amp 0.5, width 27) turned
-                                     # the AI-reconstructed backdrop into blotchy speckle and crunchy skin (review
-                                     # 2026-11-09); same effect, lower amount
-                                     **({'sharpen_amp': 0.2} if 'topaz' not in fix else {})}),
+            'grade': dict(c.get('grade', {'lumetri': {'ADBE Lumetri-0020': 140}})),
             'aep': (d / f'MP{int(nn):02d}_{slug}.aep').as_posix(), 'out_video': (d / 'ae_video.mp4').as_posix()}
     # v2: everything in AE - stabilisation keys, caption words, title card
     sp = json.load(open(d / 'stab' / 'path.json'))
@@ -540,6 +545,9 @@ def ae(nn):
     plan['stroke_em'] = lay['style']['bord_em']
     plan['shadow_alpha'] = lay['style']['shadow_alpha']
     plan['glow'] = c.get('glow', {'radius': 160, 'exposure': 0.25})
+    # the preset's Sapphire sharpen, per source (review 2026-11-09, face Laplacian + 1:1 crops): Topaz-upscaled 1080p ->
+    # 0.2 (0.5 turned AI texture into speckle); 4K-native -> 0.9 (0.5 under the preset's glow left skin waxy, 1.3 crunchy)
+    plan['grade'].setdefault('sharpen_amp', 0.2 if 'topaz' not in fix else 0.9)
     plan['freezes'] = c.get('freezes', [])
     plan['zooms'] = c.get('zooms', [])
     # blurred band source: backdrop near the top of the frame (below any burned-in banner), beside the face - hands

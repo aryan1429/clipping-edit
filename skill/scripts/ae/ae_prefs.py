@@ -2,9 +2,7 @@
 The AE GUI rewrites the prefs file on quit (it drops the Concurrent Frame Rendering section = MFR on, and
 re-enables the disk cache); MFR multiplies per-frame memory by the core count (13-19 GB seen with Sapphire)."""
 import os, sys
-# AE 2025 (25.x) on Windows; override with CLIP_AE_PREFS=<path to 'Adobe After Effects <ver> Prefs.txt'>
-P = os.environ.get('CLIP_AE_PREFS') or os.path.join(os.environ.get('APPDATA', ''), 'Adobe', 'After Effects', '25.6',
-                                                  'Adobe After Effects 25.6 Prefs.txt')
+P = os.path.join(os.environ['APPDATA'], 'Adobe', 'After Effects', '25.6', 'Adobe After Effects 25.6 Prefs.txt')
 
 
 def pin(mfr_off=True):

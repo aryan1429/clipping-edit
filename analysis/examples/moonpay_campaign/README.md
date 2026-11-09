@@ -19,9 +19,12 @@
 `review_pack.py` builds per-clip review packs (3 contact sheets, cover frame, transcript, caption chunks, meta) for the
 two-lens adversarial review (visual + copy/brief, each P0/P1 finding re-checked by a skeptic) described in ref 09.
 
-Per-clip knobs in `clips_final.json`: `remove_words`, `caption_fix`, `solo_words`, `brk_after`, `max_words`,
-`safe_bottom`, `drop_max`, `max_upscale`, `stab_room`, `freezes` ([{f0, f1, src}]), `zooms` ([{f0, f1, scale, cx, cy}]),
-`hard_joins`, `title_highlight`, `post_captions`.
+Per-clip knobs in `clips_final.json`: `remove_words`, `asr_fix` ({word_id: {start, end}} timing fixes applied before
+cutting, so a removed brand name leaves no audible fragment), `caption_fix`, `solo_words`, `brk_after`, `max_words`,
+`safe_bottom`, `drop_max`, `max_upscale`, `stab_room`, `freezes` ([{f0, f1, src}]), `zooms` ([{f0, f1, scale, cx, cy}];
+`wide_zoom.py NN SCALE` finds a wide-shot span and snaps it to the shot's cuts), `grade` (Lumetri overrides by
+matchName, `bc` [brightness, contrast] for the preset's Brightness & Contrast, `sharpen_amp` for its Sapphire sharpen -
+default 0.2 on Topaz-upscaled, 0.9 on 4K-native), `hard_joins`, `title_highlight`, `post_captions`.
 
 Environment: `CLIP_JOB` (job folder), `CLIP_SKILL_SCRIPTS`, `CLIP_FFMPEG_DIR`, `CLIP_AE_PRESET` (the colour-correction
 `.ffx`), `CLIP_DELIVER`, `CLIP_SFX_LIB` (an SFX library index with roles + fingerprints), `TOPAZ_FFMPEG`,
