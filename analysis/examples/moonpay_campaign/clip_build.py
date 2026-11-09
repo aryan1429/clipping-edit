@@ -1,4 +1,4 @@
-"""clip_build.py - worked example (a 7-clip brand campaign, ref 09): path C pipeline: skill scripts (cut, splice, face track, captions, mix, mux) + Topaz + After Effects.
+"""clip_build.py - MoonPay clip pipeline: skill scripts (cut, splice, face track, captions, mix, mux) + Topaz + After Effects.
 
 usage: py -P clip_build.py <stage> NN      stages: prep topaz overlay ae render audio final qc all
        clips_final.json (job root) holds the picked clips (rank = NN, source_id, word ids, title, captions...).
@@ -6,7 +6,7 @@ Canvas 1080x1920 @ 60000/1001. Native-fps cut + face track -> Topaz (Proteus up 
 -> AE comp (footage, punch-in accents, Premium Glow CC adjustment layer, caption overlay, title) -> H.264 40 Mbps
 -> finalize_mux with the dialogue + SFX mix.
 """
-import json, os, sys, subprocess, math, shutil, re, glob
+import json, os, sys, subprocess, math, shutil, re, glob, time
 from fractions import Fraction
 from pathlib import Path
 
@@ -27,8 +27,8 @@ ENV = dict(os.environ, PYTHONIOENCODING='utf8', TVAI_MODEL_DATA_DIR=TVMD, TVAI_M
 
 BANNER_SRC_PX = {'AddKLpRp3a8': 92}   # CNBC "Sponsored and Programmed by" bar at the top of the source frame
 TITLE_TOP = 190                        # title box top on the canvas (9:16 top UI band ends ~168)
-PURPLE, YELLOW, GREEN = '#B98BFF', '#FFD84D', '#4DFF9A'
-PRODUCT_WORDS = {'MOONPAY', "MOONPAY'S", 'PAYBOX', 'ONRAMP', 'OFFRAMP', 'ON-RAMP', 'OFF-RAMP', 'OWS', 'COMMERCE', 'AGENTS',
+PURPLE, YELLOW, GREEN = '#9D5CFF', '#FFD84D', '#4DFF9A'
+PRODUCT_WORDS = {'MOONPAY', "MOONPAY'S", 'PAYBOX', 'ONRAMP', 'OFFRAMP', 'ONRAMPS', 'OFFRAMPS', 'MOONAGENTS', 'ON-RAMP', 'OFF-RAMP', 'OWS', 'COMMERCE', 'AGENTS',
                  'ENTERPRISE', 'INSTITUTIONAL', 'TRADE'}
 KEY_WORDS = {'AI', 'AGENT', 'AGENTS', 'CRYPTO', 'STABLECOINS', 'STABLECOIN', 'MONEY', 'INTERNET', 'SOFTWARE', 'WALLET',
              'WALLETS', 'PAYMENTS', 'PAYMENT', 'FIAT', 'BANKS', 'SECONDS', 'TRILLIONS', 'BILLION', 'MILLION', 'MILLIONS',
@@ -94,11 +94,12 @@ def track(nn):
     cut = json.load(open(d / 'cutlist.json'))
     joins = [s['out_frame'] for s in cut['segments'][1:]]
     four_k = json.load(open(JOB / 'facts' / f'{sid}.json'))['video']['height'] >= 2000
-    size = '1080x1920' if four_k else '540x960'
-    upmax = c.get('max_upscale', 1.35 if four_k else 1.25)
+    # v2: crop at the source's native scale (no upscale in the crop: Topaz does the 2x), rendered near-lossless
+    size = '1080x1920' if four_k else '608x1080'
+    upmax = c.get('max_upscale', 1.0)
     args = [PY, '-P', SK / 'face_track.py', 'run', d / 'cut.mov', '--workdir', d / 'face', '--size', size,
             '--audio', d / 'dialogue.wav', '--subject', c.get('subject', 'auto'), '--mode', c.get('cam_mode', 'smooth'),
-            '--face-h', str(c.get('face_h', 0.22)), '--eyes-y', str(c.get('eyes_y', 0.40)), '--max-upscale', str(upmax), '--render']
+            '--face-h', str(c.get('face_h', 0.17)), '--eyes-y', str(c.get('eyes_y', 0.40)), '--max-upscale', str(upmax)]
     # a join that removed > 1.5 s of source can land on another camera angle: hard cut (reset), else a jump cut
     segs = cut['segments']
     hard = [s['out_frame'] for p, s in zip(segs, segs[1:]) if s['src_in_s'] - p['src_out_s'] > 1.5 or c.get('hard_joins')]
@@ -110,21 +111,29 @@ def track(nn):
     r = run(args, check=False)
     print('face_track rc', r.returncode)
     (d / 'face' / 'ft_rc.txt').write_text(str(r.returncode))
+    run([PY, '-P', SK / 'face_track.py', 'render', d / 'cut.mov', d / 'face' / 'path.json', '--out', d / 'reframe.mp4', '--crf', '4'])
 
 
 # ------------------------------------------------------------------ topaz: enhance + interpolate to 59.94, then de-blend cuts
 def topaz(nn):
+    wait_ram()
     c, d = clip_cfg(nn), cdir(nn)
     fps_in = native_fps(c['source_id'])
-    n_in, w, h, _ = nframes(d / 'face' / 'preview.mp4')
-    scale = 2 if w < 1000 else 1
-    flt = f'tvai_up=model=prob-3:scale={scale}:device=0:vram=1:instances=1'
+    n_in, w, h, _ = nframes(d / 'reframe.mp4')
+    if w >= 1000 and fps_in == OUT_FPS:
+        # 4K60 source: the native crop is 1080x1920 already (a 1:1 crop of the 4K frame) - no AI upscale needed
+        shutil.copy(d / 'reframe.mp4', d / 'topaz.mp4')
+        json.dump({'n_in': n_in, 'n_out': n_in, 'ratio': '1', 'fix': {}, 'topaz': 'skipped (4K60 native crop)'}, open(d / 'topaz_fix.json', 'w'))
+        print('topaz skipped: 4K60 native crop', n_in)
+        return
+    # Gaia HQ (ghq-5) won the A/B on compressed 1080p YouTube faces (Proteus / Artemis smear skin into wax)
+    flt = f'tvai_up=model=ghq-5:scale=2:device=0:vram=1:instances=1'
     if fps_in != OUT_FPS:
         flt += f',tvai_fi=model=apo-8:fps={OUT_FPS.numerator}/{OUT_FPS.denominator}:device=0:vram=1:instances=1'
     flt += f',scale={W}:{H}:flags=lanczos,setsar=1'
     raw = d / 'topaz_raw.mp4'
-    run([TV, '-hide_banner', '-v', 'error', '-y', '-i', d / 'face' / 'preview.mp4', '-vf', flt, '-an', '-c:v', 'h264_nvenc',
-         '-preset', 'p7', '-tune', 'hq', '-rc', 'vbr', '-cq', '13', '-b:v', '0', '-maxrate', '120M', '-bufsize', '240M',
+    run([TV, '-hide_banner', '-v', 'error', '-y', '-i', d / 'reframe.mp4', '-vf', flt, '-an', '-c:v', 'h264_nvenc',
+         '-preset', 'p7', '-tune', 'hq', '-rc', 'vbr', '-cq', '11', '-b:v', '0', '-maxrate', '150M', '-bufsize', '240M',
          '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-g', '60', '-bf', '0', '-r', f'{OUT_FPS.numerator}/{OUT_FPS.denominator}', raw])
     # target frame count on the 59.94 grid
     n_out = round(n_in * OUT_FPS / fps_in)
@@ -176,6 +185,28 @@ def topaz(nn):
     raw.unlink()
 
 
+# ------------------------------------------------------------------ stab: face tracking + stabilising keys for the AE footage layer
+def stab(nn):
+    c, d = clip_cfg(nn), cdir(nn)
+    fix = json.load(open(d / 'topaz_fix.json'))
+    p1 = json.load(open(d / 'face' / 'path.json'))
+    ratio = Fraction(fix['ratio'])
+    resets = sorted({int(math.ceil(r * ratio)) for r in p1.get('resets', [])})
+    for mode in (c.get('stab_mode', 'steady'), 'smooth'):
+        args = [PY, '-P', SK / 'face_track.py', 'run', d / 'topaz.mp4', '--workdir', d / 'stab', '--size', f'{W}x{H}',
+                '--mode', mode, '--face-h', '0.6', '--max-upscale', str(c.get('stab_room', 1.05)), '--eyes-y', str(c.get('eyes_y', 0.40)),
+                '--subject', c.get('subject', 'auto')]
+        if resets:
+            args += ['--cut-frames', ','.join(map(str, resets))]
+        r = run(args, check=False)
+        q = json.load(open(d / 'stab' / 'qc' / 'face_track_qc.json')) if (d / 'stab' / 'qc' / 'face_track_qc.json').exists() else {}
+        bad = [f['id'] for f in q.get('findings', []) if f['rank'] == 'P0' and f['id'] not in ('face_height', 'eyes_y')]
+        print('stab', mode, 'rc', r.returncode, 'P0 (excl. framing medians):', bad)
+        if not bad:
+            break
+    json.dump({'mode': mode, 'p0': bad}, open(d / 'stab' / 'stab_mode.json', 'w'))
+
+
 # ------------------------------------------------------------------ overlay: caption tokens -> captions.py -> transparent mov; title PNG
 def tokens_for(c, cut, n_out):
     words = cut['words']
@@ -205,11 +236,28 @@ def tokens_for(c, cut, n_out):
         elif core in KEY_WORDS:
             col = GREEN
         tk = {'d': d, 'src': [w['id']]}
+        if w['id'] in c.get('brk_after', ()):  # end a chunk after this word (keeps a late word out of a dying chunk)
+            tk['brk'] = True
+        if w['id'] in c.get('solo_words', ()):  # a word that must stand alone (fits the gap above a close-up face)
+            tk['solo'] = True
         if col:
             tk['c'] = col
         if re.search(r'[.!?]$', t):
             tk['brk'] = True
         toks.append(tk)
+    # a number and its unit are one token ("$10" + "BILLION" split across chunks read as ten dollars - review 2026-11-09)
+    units = {'BILLION', 'BILLIONS', 'MILLION', 'MILLIONS', 'TRILLION', 'TRILLIONS', 'THOUSAND', 'PERCENT', 'X'}
+    glued = []
+    for tk in toks:
+        prev = glued[-1] if glued else None
+        if prev and re.search(r'\d', prev['d']) and tk['d'] in units and not prev.get('brk'):
+            prev['d'] += ' ' + tk['d']; prev['src'] += tk['src']
+            prev['c'] = prev.get('c') or tk.get('c') or YELLOW
+            if tk.get('brk'):
+                prev['brk'] = True
+            continue
+        glued.append(tk)
+    toks[:] = glued
     chunk_tokens(toks, {w['id']: w for w in words}, c.get('max_words', 4))
     return {'fps': f'{OUT_FPS.numerator}/{OUT_FPS.denominator}', 'frames': n_out,
             'words': [{'id': w['id'], 'start': w['start'], 'end': w['end']} for w in words], 'tokens': toks}
@@ -219,23 +267,27 @@ def chunk_tokens(toks, wmap, maxw=4):
     """ref 01 chunks: 2-4 words, break at sentence/comma punctuation or a gap > 0.25 s, balanced sizes, no 1-word orphans."""
     phrases, cur = [], []
     for i, t in enumerate(toks):
+        if t.get('solo') and cur:
+            phrases.append(cur); cur = []
         cur.append(t)
         end = wmap[t['src'][-1]]['end']
         nxt = toks[i + 1] if i + 1 < len(toks) else None
         gap = (wmap[nxt['src'][0]]['start'] - end) if nxt else 9
         raw = wmap[t['src'][-1]]['text'].strip()
-        if t.get('brk') or raw[-1:] in ',;:' or gap > 0.25 or nxt is None:
+        if t.get('brk') or t.get('solo') or (nxt and nxt.get('solo')) or raw[-1:] in ',;:' or gap > 0.25 or nxt is None:
             phrases.append(cur); cur = []
     # merge a 1-word phrase into a neighbour when that keeps <= maxw words
     merged = []
     for ph in phrases:
-        if merged and (len(ph) == 1 or len(merged[-1]) == 1) and len(merged[-1]) + len(ph) <= maxw                 and not merged[-1][-1].get('brk'):
+        if merged and (len(ph) == 1 or len(merged[-1]) == 1) and len(merged[-1]) + len(ph) <= maxw                 and not merged[-1][-1].get('brk') and not any(t.get('solo') for t in merged[-1] + ph):
             merged[-1] = merged[-1] + ph
         else:
             merged.append(ph)
     for t in toks:
         t.pop('brk', None)
     for ph in merged:
+        for t in ph:
+            t.pop('solo', None)
         n = len(ph)
         k = -(-n // maxw)
         sizes = [n // k + (1 if j < n % k else 0) for j in range(k)]
@@ -293,17 +345,21 @@ def title_png(text, hl, out):
 def framing(c, d, n_out, tbox):
     """face anchor, head-room drop, banner mask and per-frame face boxes on the final canvas (after the drop)."""
     import statistics
-    path = json.load(open(d / 'face' / 'path.json'))
+    p1 = json.load(open(d / 'face' / 'path.json'))          # stage 1: source -> native crop (= topaz frame)
+    banner = 0.0
+    bsrc = BANNER_SRC_PX.get(c['source_id'], 0)
+    for i in range(len(p1['frames_data']['cy'])):
+        f1 = p1['frames_data']; y0 = f1['cy'][i] - f1['ch'][i] / 2
+        if bsrc and y0 < bsrc:
+            banner = max(banner, (bsrc - y0) * H / f1['ch'][i])
+    path = json.load(open(d / 'stab' / 'path.json'))         # stage 2: AE face stabilisation on the topaz frame
     fd = path['frames_data']
     fbc = path.get('face', {}).get('fused_box') or [[], [], [], []]   # column-wise: [x[], y[], w[], h[]]
     fx = [None if fbc[0][i] is None else (fbc[0][i], fbc[1][i], fbc[2][i], fbc[3][i]) for i in range(len(fbc[0]))]
-    xs, ys, tops, boxes, banner = [], [], [], [], 0.0
-    bsrc = BANNER_SRC_PX.get(c['source_id'], 0)
+    xs, ys, tops, boxes = [], [], [], []
     for i, b in enumerate(fx):
         x0 = fd['cx'][i] - fd['cw'][i] / 2; y0 = fd['cy'][i] - fd['ch'][i] / 2
         sx, sy = W / fd['cw'][i], H / fd['ch'][i]
-        if bsrc and y0 < bsrc:
-            banner = max(banner, (bsrc - y0) * sy)
         if b:
             cb = [(b[0] - x0) * sx, (b[1] - y0) * sy, (b[0] + b[2] - x0) * sx, (b[1] + b[3] - y0) * sy]
             if -50 < cb[1] < H * 0.8:
@@ -327,6 +383,24 @@ def framing(c, d, n_out, tbox):
         _, x0, y0, x1, y1 = bx
         q = [ax + (x0 - ax) * g, ay + (y0 - ay) * g + drop, ax + (x1 - ax) * g, ay + (y1 - ay) * g + drop]
         out_boxes.append([bx[0]] + [round(v, 1) for v in q])
+    # freeze-frames (AE holds frame src over f0..f1, e.g. to hide a branded audience cutaway): the face sits where it was
+    # on frame src, grown 7 % for the slow push-in on the frozen frame
+    byf = {b[0]: b for b in out_boxes}
+    for fz in c.get('freezes', []):
+        sb = byf.get(fz['src'])
+        if not sb or sb[1] is None:
+            raise SystemExit(f"freeze src frame {fz['src']} has no face box")
+        cx, cy, hw, hh = (sb[1] + sb[3]) / 2, (sb[2] + sb[4]) / 2, (sb[3] - sb[1]) / 2 * 1.07, (sb[4] - sb[2]) / 2 * 1.07
+        for i, b in enumerate(out_boxes):
+            if fz['f0'] <= b[0] <= fz['f1']:
+                out_boxes[i] = [b[0], round(cx - hw, 1), round(cy - hh, 1), round(cx + hw, 1), round(cy + hh, 1)]
+    # punch-ins on wide stage shots (AE ZOOM null, a cut in/out at the shot's edges): scale the face boxes the same way
+    for zm in c.get('zooms', []):
+        k, zx, zy = zm['scale'] / 100.0, zm['cx'], zm['cy']
+        for i, b in enumerate(out_boxes):
+            if b[1] is not None and zm['f0'] <= b[0] <= zm['f1']:
+                out_boxes[i] = [b[0], round(zx + (b[1] - zx) * k, 1), round(zy + (b[2] - zy) * k, 1),
+                                round(zx + (b[3] - zx) * k, 1), round(zy + (b[4] - zy) * k, 1)]
     fr = {'anchor': [round(ax, 1), round(ay, 1)], 'drop': drop, 'mask_top': mask_top, 'feather': feather,
           'face_top_p10': round(p10, 1), 'banner_px': round(banner, 1)}
     json.dump(fr, open(d / 'framing.json', 'w'), indent=1)
@@ -353,9 +427,7 @@ def overlay(nn):
     if r.returncode:
         print('captions.py rc', r.returncode)
         raise SystemExit(1)
-    lay = json.load(open(d / 'captions_layout.json', encoding='utf8'))
-    b = lay['burn']
-    ass_alpha(b, n_out, d / 'captions_alpha.mov')
+    print('caption layout ok (AE builds the text layers from captions_layout.json)')
 
 
 def ass_alpha(b, n_out, out):
@@ -441,14 +513,84 @@ def ae(nn):
             'title_cy_png': (t['box'][1] + t['box'][3]) / 2, 'title_cy': title_top + (t['box'][3] - t['box'][1]) / 2,
             'drop': drop, 'mask_top': mask_top, 'feather': feather, 'face_top_p10': round(p10, 1), 'scale_keys': scale_keys,
             'anchor': [round(ax, 1), round(ay, 1)], 'accents': acc, 'push': push, 'punch': punch,
-            'grade': c.get('grade', {}),
+            'grade': c.get('grade', {'lumetri': {'ADBE Lumetri-0020': 140},
+                                     # Topaz-upscaled 1080p footage: the preset's Sapphire sharpen (amp 0.5, width 27) turned
+                                     # the AI-reconstructed backdrop into blotchy speckle and crunchy skin (review
+                                     # 2026-11-09); same effect, lower amount
+                                     **({'sharpen_amp': 0.2} if 'topaz' not in fix else {})}),
             'aep': (d / f'MP{int(nn):02d}_{slug}.aep').as_posix(), 'out_video': (d / 'ae_video.mp4').as_posix()}
+    # v2: everything in AE - stabilisation keys, caption words, title card
+    sp = json.load(open(d / 'stab' / 'path.json'))
+    ec = sp['effectcraft']
+    assert len(ec['position']) == n_out, (len(ec['position']), n_out)
+    plan['stab'] = {'anchor': ec['anchor'], 'position': [[round(x, 2), round(y, 2)] for x, y in ec['position']],
+                    'scale': [round(v, 3) for v in ec['scale']]}
+    plan['stab_mode'] = json.load(open(d / 'stab' / 'stab_mode.json'))['mode']
+    lay = json.load(open(d / 'captions_layout.json', encoding='utf8'))
+    words = []
+    for ch in lay['chunks']:
+        for wd in ch['words']:
+            col = wd['color'].upper()
+            words.append({'t': wd['text'], 'c': col, 'a': wd['appear_f'], 'f': wd['full_f'], 'e': wd['end_f'], 'ci': ch['i'],
+                          'x': wd['baseline_center'][0], 'y': wd['baseline_center'][1], 'em': round(wd['em_px'] * wd.get('scale', 1.0), 3),
+                          'kw': col != '#FFFFFF', 'inkw': wd['box_ink'][2] - wd['box_ink'][0]})
+    plan['words'] = words
+    plan['cap_font'] = lay['font']['postscript']
+    plan['cap_ratio'] = lay['font']['cap_ratio']
+    plan['stroke_em'] = lay['style']['bord_em']
+    plan['shadow_alpha'] = lay['style']['shadow_alpha']
+    plan['glow'] = c.get('glow', {'radius': 160, 'exposure': 0.25})
+    plan['freezes'] = c.get('freezes', [])
+    plan['zooms'] = c.get('zooms', [])
+    # blurred band source: backdrop near the top of the frame (below any burned-in banner), beside the face - hands
+    # gesturing at face height leaked into a face-height sample as orange ghosts (review 2026-11-09)
+    plan['bg_y'] = c.get('bg_y', round(fr.get('banner_px', 0) + 150))
+    # band colour: median of the backdrop rows at bg_y over the clip; the band is 75 % this flat colour over the blurred
+    # footage, so a head or hand passing the sample point can only tint it faintly (review 2026-11-09)
+    import cv2, numpy as np
+    cap = cv2.VideoCapture(str(d / 'topaz.mp4')); nfr = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or n_out
+    cols = []
+    for fi in range(0, nfr, max(1, nfr // 24)):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, fi); ok, im = cap.read()
+        if ok:
+            y = min(im.shape[0] - 41, max(40, plan['bg_y']))
+            cols.append(np.median(im[y - 40:y + 40].reshape(-1, 3), axis=0))
+    cap.release()
+    b, g, r = np.median(np.array(cols), axis=0) if cols else (40, 30, 60)
+    plan['bg_color'] = c.get('bg_color', [round(float(r) / 255, 3), round(float(g) / 255, 3), round(float(b) / 255, 3)])
+    text = chr(13).join(t['lines'])   # AE paragraph break
+    hl, hlw = [], [x.upper() for x in c.get('title_highlight', [])]
+    pos = 0
+    for tok in re.split(r'(\s+)', text):
+        core = re.sub(r"[^A-Za-z0-9']", '', tok).upper()
+        if core and (core in hlw or core.replace("'S", '') in hlw):
+            hl.append([pos, pos + len(tok.rstrip('?.,!'))])
+        pos += len(tok)
+    plan['title'] = {'text': text, 'font': 'Montserrat-ExtraBold', 'size': t['size'], 'hl': hl, 'hl_color': '#7C22FF',
+                     'top': TITLE_TOP, 'pad_x': 34, 'pad_y': 22, 'bottom': TITLE_TOP + (t['box'][3] - t['box'][1])}
     json.dump(plan, open(d / 'ae_plan.json', 'w'), indent=1)
     jsx = d / 'build.jsx'
-    jsx.write_text(f'var PLAN = {json.dumps(plan)};\n#include "{(JOB / "ae" / "build_clip.jsx").as_posix()}"\n', encoding='utf8')
+    jsx.write_text(f'var PLAN = {json.dumps(plan)};\n#include "{(JOB / "ae" / "build_clip2.jsx").as_posix()}"\n', encoding='utf8')
     r = run([PY, '-P', JOB / 'ae' / 'ae_run.py', 'run', jsx, '--timeout', '900', '--quiet', '600'], check=False)
     if 'BUILD_OK' not in (r.stdout or ''):
         raise SystemExit('AE build failed')
+
+
+def free_ram_gb():
+    r = subprocess.run(['powershell', '-NoProfile', '-c', '(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory'],
+                       capture_output=True, text=True)
+    try:
+        return int(r.stdout.strip()) / 1048576
+    except ValueError:
+        return 99
+
+
+def wait_ram(need=3.5):
+    """the user is on the laptop (Netflix): never start a heavy step below `need` GB free RAM"""
+    import time
+    while free_ram_gb() < need:
+        print(f'waiting for RAM: {free_ram_gb():.1f} GB free', flush=True)
+        time.sleep(30)
 
 
 def render(nn):
@@ -463,27 +605,79 @@ def render(nn):
     run([PY, '-P', JOB / 'ae' / 'ae_run.py', 'quit'], check=False)
     cache = Path(os.environ['LOCALAPPDATA']) / 'Temp' / 'Adobe' / 'After Effects'
     chd = d / 'chunks'; shutil.rmtree(chd, ignore_errors=True); chd.mkdir()
-    n = plan['frames']; step = 600
+    n = plan['frames']; step = int(os.environ.get('CLIP_AE_CHUNK', 120))
     parts = []
     log = open(d / 'aerender.log', 'w', encoding='utf8')
-    for k, s0 in enumerate(range(0, n, step)):
+
+    def ae_mem_mb():
+        """working set of AE's render engine (AfterFX.com); -mem_usage did not cap it (8.4 GB seen on a 15 GB laptop)."""
+        out = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq AfterFX.com', '/FO', 'CSV', '/NH'], capture_output=True,
+                             text=True, errors='replace').stdout
+        return sum(int(re.sub(r'\D', '', ln.split('","')[-1]) or 0) // 1024 for ln in out.splitlines() if 'AfterFX' in ln)
+
+    def aer(s0, e0, avi):
+        """one aerender call under a RAM watchdog: kill the tree if AE passes CLIP_AE_MAX_MB or free RAM drops < 2.5 GB."""
+        cap = int(os.environ.get('CLIP_AE_MAX_MB', 4500))
+        sys.path.insert(0, str(JOB / "tools")); import ae_prefs  # AE GUI rewrites its prefs on quit: re-pin MFR + disk cache
+        if not ae_prefs.pin(mfr_off=os.environ.get('CLIP_AE_MFR', '0') != '1'):
+            print('  WARNING: AE prefs not pinned', flush=True)
+        subprocess.run(['taskkill', '/IM', 'dynamiclinkmanager.exe', '/F'], capture_output=True)  # a stale one hangs aerender
+        p = subprocess.Popen([AER, '-project', plan['aep'], '-comp', plan['name'], '-s', str(s0), '-e', str(e0),
+                              '-RStemplate', 'Best Settings', '-OMtemplate', 'Lossless', '-output', str(avi), '-sound', 'OFF',
+                              '-mem_usage', '10', '20', '-v', 'ERRORS_AND_PROGRESS'],
+                             stdout=log, stderr=subprocess.STDOUT)
+        t0 = time.time(); seen = False; last_eng = t0; last_sz = -1; last_grow = t0
+        while p.poll() is None:
+            time.sleep(4)
+            mb = ae_mem_mb()
+            now = time.time()
+            if mb > 0:
+                seen, last_eng = True, now
+            sz = os.path.getsize(avi) if os.path.exists(avi) else 0
+            if sz != last_sz:
+                last_sz, last_grow = sz, now
+            # aerender alive but its engine never started / died (seen 2026-11-09: aerender waited 26 min on a dead
+            # engine), or the output stopped growing
+            hung = ((not seen) and now - t0 > 90) or (seen and now - last_eng > 60) or (seen and now - last_grow > 240)
+            if mb > cap or free_ram_gb() < 2.5 or time.time() - t0 > 5400 or hung:
+                subprocess.run(['taskkill', '/PID', str(p.pid), '/T', '/F'], capture_output=True)
+                p.wait()
+                print(f'  watchdog: killed aerender f{s0}-{e0} (AE {mb} MB, free {free_ram_gb():.1f} GB)', flush=True)
+                return False
+        return True
+
+    k, s0 = 0, 0
+    while s0 < n:
         e0 = min(n, s0 + step) - 1
         for sub in cache.glob('*/Disk Cache*'):
             shutil.rmtree(sub, ignore_errors=True)
+        wait_ram()
         part = chd / f'part{k:02d}.mp4'
-        for attempt in range(2):
-            r = subprocess.run([AER, '-project', plan['aep'], '-comp', plan['name'], '-s', str(s0), '-e', str(e0),
-                                '-RStemplate', 'Best Settings', '-OMtemplate', 'H.264 - Match Render Settings - 40 Mbps',
-                                '-output', str(part), '-sound', 'OFF', '-mem_usage', '25', '40', '-v', 'ERRORS_AND_PROGRESS'],
-                               capture_output=True, text=True, encoding='utf8', errors='replace', timeout=5400)
-            log.write(r.stdout[-3000:] + r.stderr[-2000:])
-            got = sorted(glob.glob(str(part.with_suffix('')) + '*'))
+        for attempt in range(3):
+            for g in glob.glob(str(part.with_suffix('')) + '.*'):
+                os.remove(g)
+            if not aer(s0, e0, part.with_suffix('.avi')):
+                # smaller chunk, then wait for RAM before the retry
+                step = max(30, step // 2); e0 = min(n, s0 + step) - 1
+                wait_ram(); continue
+            got = sorted(glob.glob(str(part.with_suffix('')) + '.*'))
+            got = [g for g in got if not g.endswith('.mp4')]
             nf = nframes(got[0])[0] if got and os.path.getsize(got[0]) > 1000 else 0
+            if nf == e0 - s0 + 1:
+                # one lossy encode from the lossless AE frames: H.264 High (delivery codec rule), then drop the big file
+                run([FF, '-v', 'error', '-y', '-i', got[0], '-map', '0:v:0', '-c:v', 'h264_nvenc', '-preset', 'p7', '-tune', 'hq',
+                     '-rc', 'vbr', '-cq', '18', '-b:v', '0', '-maxrate', '35M', '-bufsize', '70M', '-profile:v', 'high',
+                     '-pix_fmt', 'yuv420p', '-bf', '0', '-g', '60', '-color_primaries', 'bt709', '-color_trc', 'bt709',
+                     '-colorspace', 'bt709', '-r', f'{OUT_FPS.numerator}/{OUT_FPS.denominator}', str(part)])
+                os.remove(got[0])
+                got = [str(part)]
+                nf = nframes(part)[0]
             print(f'chunk {k} f{s0}-{e0}: {nf} frames (want {e0 - s0 + 1}) attempt {attempt}', flush=True)
             if nf == e0 - s0 + 1:
                 parts.append(got[0]); break
         else:
             raise SystemExit(f'chunk {k} failed')
+        s0, k = e0 + 1, k + 1
     log.close()
     lst = chd / 'list.txt'
     lst.write_text(''.join("file '" + Path(p).as_posix() + "'\n" for p in parts))
@@ -540,27 +734,61 @@ def audio(nn):
         input=None) if False else None
     p = subprocess.Popen([FF, '-v', 'error', '-y', '-f', 'f32le', '-ar', str(sr), '-ac', '1', '-i', '-', '-c:a', 'pcm_f32le', str(d / 'dialogue60.wav')], stdin=subprocess.PIPE)
     p.stdin.write(a.tobytes()); p.stdin.close(); p.wait()
+    # music bed: licence-checked instrumental (find_music.py, ref 06), a different track per clip (candidate = rank),
+    # kept low under the CEO's voice (-24 LUFS bed, ducked -10 dB while he speaks)
+    mj = d / 'music' / 'music.json'
+    if not mj.exists():
+        run([PY, '-P', SK / 'find_music.py', '--mood', c.get('mood', 'inspiring'), '--query', c.get('music_query', 'corporate technology'),
+             '--clip-s', f'{float(n_out / OUT_FPS):.1f}', '--dialogue', d / 'dialogue60.wav', '--top', '10', '--max-analyse', '14',
+             '--pick', str(c.get('music_pick', c['rank'])), '--out-dir', d / 'music', '--ffmpeg', FF, '--ffprobe', FP])
+    music = json.load(open(mj, encoding='utf8'))
+    bed = dict(music['bed']); bed['lufs'] = c.get('bed_lufs', -24.0)
     usedf = JOB / 'sfx_used.json'
     used = set(json.load(open(usedf))) if usedf.exists() else set()
     sfx = pick_sfx(len(plan['accents']), used)
+    gain = c.get('sfx_gain_db', -9.0)
+    for attempt in range(4):
+        json.dump(sorted(used), open(usedf, 'w'), indent=0)
+        # mix_audio lands each hit's peak on (frame + 1): pass the accent frame itself (it measures the peak per file)
+        items = [{'path': f['file'], 'frame': fr, 'gain_db': gain} for f, fr in zip(sfx, plan['accents'])]
+        ap = {'fps': f'{OUT_FPS.numerator}/{OUT_FPS.denominator}', 'frames': n_out, 'dialogue': str(d / 'dialogue60.wav'),
+              'words': [[w['start'], w['end']] for w in cut['words']], 'bed': bed, 'sfx': items,
+              'duck': {'depth_db': -10, 'attack_s': 0.02, 'release_s': 0.3, 'merge_gap_s': 0.6}}
+        json.dump(ap, open(d / 'audio_plan.json', 'w'), indent=1)
+        r = run([PY, '-P', SK / 'mix_audio.py', '--plan', d / 'audio_plan.json', '--outdir', d / 'mix', '--ffmpeg', FF, '--ffprobe', FP], check=False)
+        if not r.returncode:
+            break
+        rep = json.load(open(d / 'mix' / 'mix_report.json', encoding='utf8')) if (d / 'mix' / 'mix_report.json').exists() else {}
+        failed = rep.get('failed', [])
+        if failed != ['sfx_align']:
+            raise SystemExit(f'mix failed: {failed}')
+        # a sound whose loudest moment is not its onset hit cannot be aligned: swap it for another library sound
+        bad = {m['i'] for m in rep['gates']['sfx_align']['measured']}
+        print('sfx_align: swapping', sorted(bad), flush=True)
+        got = pick_sfx(len(bad), used)
+        if len(got) < len(bad):  # job pool exhausted: distinct within this clip, reuse across clips is fine
+            mine = {f['file'] for f in sfx} | {f['file'] for f in got}
+            got += pick_sfx(len(bad) - len(got), set(mine))
+        if len(got) < len(bad):
+            raise SystemExit('mix failed: no aligned SFX left in the library')
+        repl = iter(got)
+        sfx = [next(repl) if i in bad else f for i, f in enumerate(sfx)]
+    else:
+        raise SystemExit('mix failed: sfx_align after 4 swaps')
     json.dump(sorted(used), open(usedf, 'w'), indent=0)
-    items = []
-    for f, fr in zip(sfx, plan['accents']):
-        lead = int(f.get('peak_f', 6) * float(OUT_FPS) / 30.0)  # library peak frame is at 30 fps
-        items.append({'path': f['file'], 'frame': max(0, fr + 1 - lead), 'gain_db': c.get('sfx_gain_db', -9.0)})
-    ap = {'fps': f'{OUT_FPS.numerator}/{OUT_FPS.denominator}', 'frames': n_out, 'dialogue': str(d / 'dialogue60.wav'),
-          'words': [[w['start'], w['end']] for w in cut['words']], 'bed': None, 'sfx': items,
-          'duck': {'depth_db': -10, 'attack_s': 0.02, 'release_s': 0.3, 'merge_gap_s': 0.6}}
-    json.dump(ap, open(d / 'audio_plan.json', 'w'), indent=1)
-    r = run([PY, '-P', SK / 'mix_audio.py', '--plan', d / 'audio_plan.json', '--outdir', d / 'mix', '--ffmpeg', FF, '--ffprobe', FP], check=False)
-    if r.returncode:
-        raise SystemExit('mix failed')
 
 
 def final(nn):
     c, d = clip_cfg(nn), cdir(nn)
     plan = json.load(open(d / 'ae_plan.json'))
-    vid = sorted(glob.glob(str(Path(plan['out_video']).with_suffix('')) + '*'))[0]
+    src = sorted(glob.glob(str(Path(plan['out_video']).with_suffix('')) + '*'))[0]
+    # delivery codec rule: H.264 High (AE's H.264 template writes Main) -> one NVENC High pass
+    vid = str(d / 'ae_video_high.mp4')
+    vid = src
+    if False:
+     run([FF, '-v', 'error', '-y', '-i', src, '-c:v', 'h264_nvenc', '-preset', 'p7', '-tune', 'hq', '-rc', 'vbr',
+         '-cq', '16', '-b:v', '0', '-maxrate', '60M', '-bufsize', '120M', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-bf', '0',
+         '-g', '60', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', vid])
     DELIVER.mkdir(exist_ok=True)
     out = DELIVER / f"{int(nn):02d}-{c['slug']}.mp4"
     r = run([PY, '-P', SK / 'finalize_mux.py', '--video', vid, '--mix', d / 'mix' / 'mix.wav', '--out', out,
@@ -569,7 +797,7 @@ def final(nn):
     print('final rc', r.returncode, out)
 
 
-STAGES = {'prep': prep, 'track': track, 'topaz': topaz, 'overlay': overlay, 'ae': ae, 'render': render, 'audio': audio, 'final': final}
+STAGES = {'prep': prep, 'track': track, 'stab': stab, 'topaz': topaz, 'overlay': overlay, 'ae': ae, 'render': render, 'audio': audio, 'final': final}
 # ------------------------------------------------------------------ qc: gates + review sheets
 BANNED = ['best', 'safest', 'guaranteed', 'risk-free', '100% secure', 'unhackable', 'buy now', 'last chance', "don't miss out"]
 
@@ -580,11 +808,19 @@ def qc(nn):
     plan = json.load(open(d / 'ae_plan.json'))
     out = DELIVER / f"{int(nn):02d}-{c['slug']}.mp4"
     res = {}
+    t = json.load(open(d / 'title.json'))
+    safe_top = TITLE_TOP + (t['box'][3] - t['box'][1]) + 60
     r = run([PY, '-P', SK / 'caption_gate.py', '--ass', d / 'captions.ass', '--layout', d / 'captions_layout.json', '--qc', q,
-             '--ffmpeg', FF, '--ffprobe', FP], check=False)
+             '--safe', f"65,{safe_top},950,{c.get('safe_bottom', 1330)}", '--ffmpeg', FF], check=False)
     res['caption_gate_rc'] = r.returncode
     vid = sorted(glob.glob(str(Path(plan['out_video']).with_suffix('')) + '*'))[0]
-    r = run([PY, '-P', SK / 'grade_gate.py', d / 'topaz.mp4', vid, '--edited', '--json', q / 'grade_gate.json', '--name', f'clip{nn}',
+    dur = plan['frames'] / plan['fps']
+    mask = [{'t0': 0, 't1': dur, 'box': [0, 0, W, TITLE_TOP + (t['box'][3] - t['box'][1]) + 20]},
+            {'t0': 0, 't1': dur, 'box': [40, safe_top - 20, 1000, c.get('safe_bottom', 1330) + 20]}]
+    excl = [[max(0, a / plan['fps'] - 0.5), a / plan['fps'] + 0.5] for a in plan['accents']]
+    json.dump(mask, open(q / 'grade_mask.json', 'w')); json.dump(excl, open(q / 'grade_excl.json', 'w'))
+    r = run([PY, '-P', SK / 'grade_gate.py', d / 'topaz.mp4', vid, '--edited', '--mask', q / 'grade_mask.json',
+             '--exclude', q / 'grade_excl.json', '--json', q / 'grade_gate.json', '--name', f'clip{nn}',
              '--ffmpeg', FF, '--ffprobe', FP], check=False)
     res['grade_gate_rc'] = r.returncode
     r = run([PY, '-P', SK / 'finalize_mux.py', '--check', out, '--fps', f'{OUT_FPS.numerator}/{OUT_FPS.denominator}',
